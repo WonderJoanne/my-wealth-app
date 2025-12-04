@@ -6,27 +6,25 @@ import altair as alt
 
 # --- 0. 頁面設定 ---
 st.set_page_config(
-    page_title="AssetFlow V9.5", 
+    page_title="AssetFlow V9.6", 
     page_icon="📱", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
 
-# --- 1. CSS 樣式 (強制高對比) ---
+# --- 1. CSS 樣式 ---
 st.markdown("""
 <style>
     .stApp { background-color: #F4F7F6 !important; }
-    
     html, body, p, div, span, label, h1, h2, h3, h4, h5, h6 {
         color: #1F2937 !important;
         font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
     }
-
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stSidebar"] {display: none;}
 
-    /* 頂部導航 */
+    /* 導航 */
     div[role="radiogroup"] {
         background-color: #1E3A8A !important;
         padding: 10px 5px;
@@ -47,7 +45,7 @@ st.markdown("""
         border-radius: 8px;
     }
 
-    /* 卡片通用樣式 */
+    /* 卡片 */
     .mobile-card {
         background-color: #FFFFFF !important;
         padding: 18px;
@@ -56,11 +54,8 @@ st.markdown("""
         margin-bottom: 15px;
         border: 1px solid #E5E7EB;
     }
-    .mobile-card div, .mobile-card span, .mobile-card p {
-        color: #1F2937 !important;
-    }
-
-    /* 輸入框與按鈕 */
+    
+    /* 元件 */
     input, .stSelectbox div[data-baseweb="select"] div {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
@@ -80,10 +75,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 2. 資料初始化 ---
-DEFAULT_RATES = {"TWD": 1.0, "USD": 32.5, "JPY": 0.21, "VND": 0.00128, "EUR": 35.2}
-
 if 'rates' not in st.session_state: 
-    st.session_state['rates'] = DEFAULT_RATES
+    st.session_state['rates'] = {"TWD": 1.0, "USD": 32.5, "JPY": 0.21, "VND": 0.00128, "EUR": 35.2}
 
 if 'categories' not in st.session_state:
     st.session_state['categories'] = {
@@ -100,35 +93,13 @@ if 'accounts' not in st.session_state:
     }
 
 if 'data' not in st.session_state:
-    r1 = {
-        "日期": datetime.date.today(),
-        "帳戶": "隨身皮夾",
-        "類型": "支出",
-        "分類": "餐飲",
-        "金額": 65000,
-        "幣別": "VND",
-        "備註": "Pho Bo"
-    }
-    r2 = {
-        "日期": datetime.date.today(),
-        "帳戶": "越南薪資",
-        "類型": "收入",
-        "分類": "薪資",
-        "金額": 45000000,
-        "幣別": "VND",
-        "備註": "薪水"
-    }
+    # 建立範例資料
+    r1 = {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": "支出", "分類": "餐飲", "金額": 65000, "幣別": "VND", "備註": "Pho Bo"}
+    r2 = {"日期": datetime.date.today(), "帳戶": "越南薪資", "類型": "收入", "分類": "薪資", "金額": 45000000, "幣別": "VND", "備註": "薪水"}
     st.session_state['data'] = pd.DataFrame([r1, r2])
 
 if 'loans' not in st.session_state:
-    st.session_state['loans'] = [{
-        'name': '台北房貸', 
-        'total': 10350000, 
-        'remaining': 10350000, 
-        'rate': 2.53, 
-        'years': 30, 
-        'grace_period': 24
-    }]
+    st.session_state['loans'] = [{'name': '台北房貸', 'total': 10350000, 'remaining': 10350000, 'rate': 2.53, 'years': 30, 'grace_period': 24}]
 
 if 'stocks' not in st.session_state:
     st.session_state['stocks'] = pd.DataFrame(columns=['代號', '名稱', '持有股數', '目前市價', '幣別'])
@@ -136,7 +107,7 @@ if 'stocks' not in st.session_state:
 def convert_to_twd(amount, currency):
     return amount * st.session_state['rates'].get(currency, 1.0)
 
-# --- 3. 導航列 ---
+# --- 3. 導航 ---
 selected_tab = st.radio(
     "Mobile Nav",
     ["🏠 總覽", "➕ 記帳", "📊 分析", "💳 錢包", "⚙️ 設定"],
@@ -144,7 +115,7 @@ selected_tab = st.radio(
     label_visibility="collapsed"
 )
 
-# --- 4. 計算邏輯 ---
+# --- 4. 計算 ---
 total_assets_twd = 0
 for name, info in st.session_state['accounts'].items():
     df = st.session_state['data']
@@ -163,23 +134,45 @@ home_val = sum([l['total'] for l in st.session_state['loans']])
 net_worth = total_assets_twd + invest_val + home_val - loan_val
 
 
-# === 🏠 總覽頁 ===
+# === 🏠 總覽 ===
 if selected_tab == "🏠 總覽":
-    # Hero Card HTML 生成
-    hero_style = "background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%); padding: 25px; border-radius: 20px; color: white !important; margin-bottom: 20px;"
-    hero_html = f"""
-    <div style="{hero_style}">
+    # Hero Card (使用 .format 避免 f-string 錯誤)
+    hero_html = """
+    <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%); padding: 25px; border-radius: 20px; color: white !important; margin-bottom: 20px;">
         <p style="margin:0; opacity:0.8; font-size: 14px; color: white !important;">淨資產 (Net Worth)</p>
-        <h1 style="margin:5px 0; color: white !important; font-size: 40px; font-weight: 700;">${net_worth:,.0f}</h1>
+        <h1 style="margin:5px 0; color: white !important; font-size: 40px; font-weight: 700;">${:,.0f}</h1>
         <div style="display:flex; justify-content:space-between; margin-top:10px; font-size:13px; color: white !important;">
-            <span style="color: white !important;">資產: ${total_assets_twd+invest_val+home_val:,.0f}</span>
-            <span style="color: white !important;">負債: ${loan_val:,.0f}</span>
+            <span style="color: white !important;">資產: ${:,.0f}</span>
+            <span style="color: white !important;">負債: ${:,.0f}</span>
         </div>
     </div>
-    """
+    """.format(net_worth, total_assets_twd + invest_val + home_val, loan_val)
     st.markdown(hero_html, unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(f"""
-        <div class="mobile
+        st.markdown(f"""<div class="mobile-card" style="text-align:center;"><div style="font-size:12px; color:#6B7280;">現金部位</div><div style="font-size:20px; font-weight:bold; color:#059669;">${total_assets_twd:,.0f}</div></div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""<div class="mobile-card" style="text-align:center;"><div style="font-size:12px; color:#6B7280;">投資現值</div><div style="font-size:20px; font-weight:bold; color:#2563EB;">${invest_val:,.0f}</div></div>""", unsafe_allow_html=True)
+
+    st.subheader("近期交易")
+    df_recent = st.session_state['data'].sort_index(ascending=False).head(5)
+    
+    for i, row in df_recent.iterrows():
+        icon = '💰'
+        if row['分類'] in ['餐飲', '食品']: icon = '🍜'
+        elif row['分類'] in ['交通']: icon = '🚌'
+        color = '#DC2626' if row['類型']=='支出' else '#059669'
+        date_str = row['日期'].strftime('%m/%d')
+        
+        # 安全拼接 HTML，防止換行錯誤
+        row_html = '<div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px solid #E5E7EB;">'
+        row_html += f'<div style="display:flex; align-items:center;"><div style="background:#EFF6FF; width:42px; height:42px; border-radius:50%; display:flex; justify-content:center; align-items:center; margin-right:12px; font-size:20px;">{icon}</div>'
+        row_html += f'<div><div style="font-weight:600; font-size:16px; color:#111827 !important;">{row["分類"]}</div><div style="font-size:12px; color:#6B7280;">{row["備註"]} · {row["帳戶"]}</div></div></div>'
+        row_html += f'<div style="text-align:right;"><div style="font-weight:bold; color:{color} !important;">{row["幣別"]} {row["金額"]:,.0f}</div><div style="font-size:11px; color:#9CA3AF;">{date_str}</div></div></div>'
+        
+        st.markdown(row_html, unsafe_allow_html=True)
+
+
+# === ➕ 記帳 ===
+elif selected_tab == "➕
