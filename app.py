@@ -6,7 +6,7 @@ import altair as alt
 
 # --- 0. 頁面與手機優化設定 ---
 st.set_page_config(
-    page_title="AssetFlow V9.3", 
+    page_title="AssetFlow V9.4", 
     page_icon="📱", 
     layout="wide", 
     initial_sidebar_state="collapsed"
@@ -116,7 +116,6 @@ if 'accounts' not in st.session_state:
     }
 
 if 'data' not in st.session_state:
-    # 使用多行定義避免錯誤
     r1 = {
         "日期": datetime.date.today(),
         "帳戶": "隨身皮夾",
@@ -166,7 +165,6 @@ selected_tab = st.radio(
 total_assets_twd = 0
 for name, info in st.session_state['accounts'].items():
     df = st.session_state['data']
-    # 分開計算避免單行太長
     inc = df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum()
     exp = df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
     bal = info['balance'] + inc - exp
@@ -174,7 +172,6 @@ for name, info in st.session_state['accounts'].items():
     
 invest_val = 0
 if not st.session_state['stocks'].empty:
-    # 安全計算
     s_df = st.session_state['stocks']
     invest_val = (s_df['持有股數'] * s_df['目前市價']).sum()
 
@@ -208,54 +205,3 @@ if selected_tab == "🏠 總覽":
         st.markdown(f"""
         <div class="mobile-card" style="text-align:center;">
             <div style="font-size:12px; color:#6B7280 !important;">投資現值</div>
-            <div style="font-size:20px; font-weight:bold; color:#2563EB !important;">${invest_val:,.0f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.subheader("近期交易")
-    df_recent = st.session_state['data'].sort_index(ascending=False).head(5)
-    for i, row in df_recent.iterrows():
-        # 安全取得圖示
-        icon = '💰'
-        if row['分類'] in ['餐飲', '食品']: icon = '🍜'
-        elif row['分類'] in ['交通']: icon = '🚌'
-        
-        # 安全取得顏色
-        color = '#DC2626' if row['類型']=='支出' else '#059669'
-
-        with st.container():
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px solid #E5E7EB;">
-                <div style="display:flex; align-items:center;">
-                    <div style="background:#EFF6FF; width:42px; height:42px; border-radius:50%; display:flex; justify-content:center; align-items:center; margin-right:12px; font-size:20px;">
-                        {icon}
-                    </div>
-                    <div>
-                        <div style="font-weight:600; font-size:16px; color:#111827 !important;">{row['分類']}</div>
-                        <div style="font-size:12px; color:#6B7280 !important;">{row['備註']} · {row['帳戶']}</div>
-                    </div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-weight:bold; color:{color} !important;">
-                        {row['幣別']} {row['金額']:,.0f}
-                    </div>
-                    <div style="font-size:11px; color:#9CA3AF !important;">{row['日期'].strftime('%m/%d')}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-
-# === ➕ 記帳 ===
-elif selected_tab == "➕ 記帳":
-    st.subheader("新增交易")
-    
-    tx_type = st.radio("類型", ["支出", "收入", "轉帳"], horizontal=True, label_visibility="collapsed")
-    
-    with st.container(border=True):
-        c_date, c_acct = st.columns([1, 1.5])
-        tx_date = c_date.date_input("日期", datetime.date.today())
-        acct_name = c_acct.selectbox("帳戶", list(st.session_state['accounts'].keys()))
-        curr = st.session_state['accounts'][acct_name]['currency']
-
-        st.markdown(f"<p style='margin-bottom:5px; font-size:14px; color:#6B7280 !important;'>金額 ({curr})</p>", unsafe_allow_html=True)
-        tx_amt = st.number_input("金額", min_value=
