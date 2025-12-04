@@ -6,109 +6,134 @@ import altair as alt
 
 # --- 0. 頁面設定 ---
 st.set_page_config(
-    page_title="AssetFlow V11", 
-    page_icon="✨", 
+    page_title="AssetFlow V12", 
+    page_icon="📱", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
 
-# --- 1. 定義導航常數 ---
-TAB_HOME = "🏠 總覽"
-TAB_ADD = "➕ 記帳"
-TAB_ANALYSIS = "📊 分析"
-TAB_WALLET = "💳 錢包"
-TAB_SETTINGS = "⚙️ 設定"
+# --- 1. 定義導航常數 (使用垂直排列字串，強制換行) ---
+TAB_HOME = "🏠\n總覽"
+TAB_ADD = "➕\n記帳"
+TAB_ANALYSIS = "📊\n分析"
+TAB_WALLET = "💳\n錢包"
+TAB_SETTINGS = "⚙️\n設定"
 
-# --- 2. CSS 美學 (V10 Soft UI 延續) ---
+# --- 2. CSS 美學 (V12 修復版) ---
 st.markdown("""
 <style>
+    /* 全局設定 */
     .stApp { background-color: #F5F7FA !important; }
     
     html, body, p, div, span, label, h1, h2, h3, h4, h5, h6 {
         color: #4A5568 !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     }
 
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stSidebar"] {display: none;}
 
-    /* 導航列 */
+    /* === 導航列強力修復 (Fix Overlap) === */
     div[role="radiogroup"] {
         background-color: #FFFFFF !important;
-        padding: 8px;
-        border-radius: 16px;
+        padding: 5px;
+        border-radius: 12px;
         margin-bottom: 25px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
         border: 1px solid #EDF2F7;
         display: flex;
-        justify-content: space-around;
+        justify-content: space-between;
+        width: 100%;
     }
+    
+    /* 強制隱藏 Streamlit 預設的 Radio 圓點 */
+    div[role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
+    
+    /* 導航按鈕容器 */
     div[role="radiogroup"] label {
         background-color: transparent !important;
         border: none !important;
         flex: 1;
         text-align: center;
-        transition: all 0.3s ease;
+        padding: 10px 0 !important;
+        margin: 0 2px !important;
+        border-radius: 8px;
+        transition: all 0.2s;
+        cursor: pointer;
     }
+    
+    /* 導航文字 (圖示+文字) */
     div[role="radiogroup"] p {
         color: #A0AEC0 !important; 
-        font-size: 18px !important;
+        font-size: 14px !important;
+        line-height: 1.4 !important; /* 防止行高重疊 */
         font-weight: 500 !important;
         margin: 0 !important;
+        white-space: pre-wrap !important; /* 允許換行 */
     }
+    
+    /* 選中狀態 */
     div[role="radiogroup"] label[data-checked="true"] {
         background-color: #EBF8FF !important;
-        border-radius: 12px;
-        transform: scale(1.02);
     }
+    
     div[role="radiogroup"] label[data-checked="true"] p {
         color: #3182CE !important;
         font-weight: 700 !important;
     }
 
-    /* 卡片樣式 */
+    /* === 卡片與其他 === */
     .mobile-card {
         background-color: #FFFFFF !important;
         padding: 20px;
         border-radius: 20px;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         margin-bottom: 12px;
         border: 1px solid #FFFFFF;
-        position: relative;
     }
     
-    /* 分類標題 */
     .group-header {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 700;
         color: #718096 !important;
         margin-top: 20px;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
         padding-left: 5px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
 
-    /* 輸入元件 */
+    /* 輸入框優化 */
     input, .stSelectbox div[data-baseweb="select"] div {
         background-color: #FFFFFF !important;
-        color: #4A5568 !important;
+        color: #2D3748 !important;
         border-radius: 12px !important;
         border: 1px solid #E2E8F0 !important;
     }
+    
+    /* 按鈕樣式 */
     .stButton button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
         border: none;
         border-radius: 15px;
-        height: 55px;
+        height: 50px;
         font-weight: 600;
-        box-shadow: 0 4px 14px 0 rgba(118, 75, 162, 0.39) !important;
+        width: 100%;
     }
     
     div[data-testid="stMetricValue"] { color: #2D3748 !important; }
     .stProgress > div > div > div > div { background-color: #667eea !important; }
+    
+    /* 修正 Expander 樣式 (讓編輯區好看點) */
+    .streamlit-expanderHeader {
+        background-color: transparent !important;
+        color: #4A5568 !important;
+        font-weight: 600;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -122,20 +147,18 @@ if 'categories' not in st.session_state:
         "收入": ["薪資", "獎金", "股息", "副業", "投資收益"]
     }
 
-# 帳戶資料結構升級：增加 "icon" 和標準化 "type"
+# 帳戶初始化 (如果沒有資料，給一個空字典或範例，但重點是可以編輯)
 if 'accounts' not in st.session_state:
     st.session_state['accounts'] = {
         "台幣薪轉": {"type": "銀行", "currency": "TWD", "balance": 150000, "icon": "🏦"},
         "越南薪資": {"type": "銀行", "currency": "VND", "balance": 50000000, "icon": "🇻🇳"},
         "隨身皮夾": {"type": "現金", "currency": "VND", "balance": 2500000, "icon": "💵"},
-        "美股儲蓄": {"type": "投資", "currency": "USD", "balance": 4200, "icon": "📈"},
-        "玉山信用卡": {"type": "信用卡", "currency": "TWD", "balance": -5600, "icon": "💳"},
     }
 
 if 'data' not in st.session_state:
-    r1 = {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": "支出", "分類": "餐飲", "金額": 65000, "幣別": "VND", "備註": "Pho Bo"}
-    r2 = {"日期": datetime.date.today(), "帳戶": "越南薪資", "類型": "收入", "分類": "薪資", "金額": 45000000, "幣別": "VND", "備註": "薪水"}
-    st.session_state['data'] = pd.DataFrame([r1, r2])
+    # 預設一筆資料讓圖表有東西
+    r1 = {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": "支出", "分類": "餐飲", "金額": 50000, "幣別": "VND", "備註": "範例資料"}
+    st.session_state['data'] = pd.DataFrame([r1])
 
 if 'loans' not in st.session_state:
     st.session_state['loans'] = [{'name': '台北房貸', 'total': 10350000, 'remaining': 10350000, 'rate': 2.53, 'years': 30, 'grace_period': 24}]
@@ -146,9 +169,9 @@ if 'stocks' not in st.session_state:
 def convert_to_twd(amount, currency):
     return amount * st.session_state['rates'].get(currency, 1.0)
 
-# --- 4. 導航列 ---
+# --- 4. 導航列 (Top Nav) ---
 selected_tab = st.radio(
-    "Mobile Nav",
+    "Nav",
     [TAB_HOME, TAB_ADD, TAB_ANALYSIS, TAB_WALLET, TAB_SETTINGS],
     horizontal=True,
     label_visibility="collapsed"
@@ -168,7 +191,7 @@ for name, info in st.session_state['accounts'].items():
     if twd_val >= 0:
         total_assets_twd += twd_val
     else:
-        total_liability_twd += abs(twd_val) # 負債另外算
+        total_liability_twd += abs(twd_val)
     
 invest_val = 0
 if not st.session_state['stocks'].empty:
@@ -178,9 +201,7 @@ if not st.session_state['stocks'].empty:
 loan_val = sum([l['remaining'] for l in st.session_state['loans']])
 home_val = sum([l['total'] for l in st.session_state['loans']])
 
-# 總資產 = 現金+存款+投資+房產
 real_assets = total_assets_twd + invest_val + home_val
-# 總負債 = 信用卡債+房貸
 real_liabilities = total_liability_twd + loan_val
 net_worth = real_assets - real_liabilities
 
@@ -190,11 +211,11 @@ if selected_tab == TAB_HOME:
     hero_style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 24px; color: white !important; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(118, 75, 162, 0.3);"
     hero_html = """
     <div style="{}">
-        <p style="margin:0; opacity:0.8; font-size: 14px; color: white !important; letter-spacing: 0.5px;">NET WORTH (淨資產)</p>
+        <p style="margin:0; opacity:0.8; font-size: 14px; color: white !important; letter-spacing: 0.5px;">NET WORTH</p>
         <h1 style="margin:10px 0; color: white !important; font-size: 42px; font-weight: 800; letter-spacing: -1px;">${:,.0f}</h1>
         <div style="display:flex; justify-content:space-between; margin-top:15px; padding-top:15px; border-top: 1px solid rgba(255,255,255,0.2); font-size:13px; color: white !important;">
-            <span style="color: white !important; opacity:0.9;">總資產: ${:,.0f}</span>
-            <span style="color: white !important; opacity:0.9;">總負債: ${:,.0f}</span>
+            <span style="color: white !important; opacity:0.9;">資產: ${:,.0f}</span>
+            <span style="color: white !important; opacity:0.9;">負債: ${:,.0f}</span>
         </div>
     </div>
     """.format(hero_style, net_worth, real_assets, real_liabilities)
@@ -235,7 +256,14 @@ elif selected_tab == TAB_ADD:
         
         c_date, c_acct = st.columns([1, 1.5])
         tx_date = c_date.date_input("日期", datetime.date.today())
-        acct_name = c_acct.selectbox("帳戶", list(st.session_state['accounts'].keys()))
+        
+        # 這裡要防止帳戶被刪光後報錯
+        acct_options = list(st.session_state['accounts'].keys())
+        if not acct_options:
+            st.error("請先至「錢包」建立帳戶！")
+            st.stop()
+            
+        acct_name = c_acct.selectbox("帳戶", acct_options)
         curr = st.session_state['accounts'][acct_name]['currency']
 
         st.markdown(f"<p style='margin-bottom:8px; font-size:14px; color:#718096; font-weight:500;'>金額 ({curr})</p>", unsafe_allow_html=True)
@@ -312,29 +340,20 @@ elif selected_tab == TAB_ANALYSIS:
         st.altair_chart(chart, use_container_width=True)
 
 
-# === 💳 錢包 (V11 核心功能：帳戶管理) ===
+# === 💳 錢包 (修復：新增帳戶 + 編輯功能) ===
 elif selected_tab == TAB_WALLET:
     st.subheader("帳戶與資產管理")
 
-    # --- 功能 1: 新增帳戶/錢包 (參考天天記帳) ---
+    # --- 1. 新增帳戶 ---
     with st.expander("➕ 新增帳戶/錢包", expanded=False):
-        st.caption("請選擇帳戶類型並輸入詳細資訊")
-        
-        # 類型選擇 (對應圖示)
-        type_options = {
-            "現金": "💵", 
-            "銀行": "🏦", 
-            "信用卡": "💳", 
-            "電子貨幣": "📱", 
-            "投資": "📈"
-        }
+        type_options = {"現金": "💵", "銀行": "🏦", "信用卡": "💳", "電子貨幣": "📱", "投資": "📈"}
         c_type, c_curr = st.columns(2)
         new_type = c_type.selectbox("帳戶類型", list(type_options.keys()))
         new_curr = c_curr.selectbox("幣別", ["TWD", "VND", "USD", "JPY", "CNY"])
         
         c_name, c_bal = st.columns(2)
-        new_name = c_name.text_input("帳戶名稱", placeholder="例如：國泰世華、LINE Pay")
-        new_bal = c_bal.number_input("初始餘額", value=0, step=1000)
+        new_name = c_name.text_input("帳戶名稱", placeholder="例如：國泰世華")
+        new_bal = c_bal.number_input("初始餘額", value=0.0, step=1000.0)
         
         if st.button("建立新帳戶", type="primary"):
             if new_name:
@@ -347,51 +366,50 @@ elif selected_tab == TAB_WALLET:
                 st.success(f"成功建立：{new_name}")
                 st.rerun()
             else:
-                st.error("請輸入帳戶名稱")
+                st.error("請輸入名稱")
 
-    # --- 功能 2: 分類顯示帳戶 (參考天天記帳影片) ---
-    
-    # 定義顯示順序
+    # --- 2. 帳戶列表 (支援編輯！) ---
     display_groups = ["現金", "銀行", "電子貨幣", "信用卡", "投資"]
     
     for group in display_groups:
-        # 篩選屬於該群組的帳戶
         group_accounts = {k:v for k,v in st.session_state['accounts'].items() if v.get('type') == group}
         
         if group_accounts:
             st.markdown(f'<div class="group-header">{group}</div>', unsafe_allow_html=True)
             
             for name, info in group_accounts.items():
+                # 計算當前餘額
                 df = st.session_state['data']
                 inc = df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum()
                 exp = df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
                 bal = info['balance'] + inc - exp
                 
-                twd_val = convert_to_twd(bal, info['currency'])
-                
-                # 信用卡顯示紅色(負債)，一般顯示黑色
-                bal_color = "#E53E3E" if info['type'] == '信用卡' and bal < 0 else "#2D3748"
-                
-                card_html = f"""
-                <div class="mobile-card" style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="display:flex; align-items:center;">
-                        <div style="background:#EDF2F7; width:45px; height:45px; border-radius:12px; display:flex; justify-content:center; align-items:center; margin-right:15px; font-size:20px;">
-                            {info.get('icon', '💰')}
-                        </div>
-                        <div>
-                            <div style="font-weight:bold; font-size:16px; color:#2D3748 !important;">{name}</div>
-                            <div style="font-size:12px; color:#A0AEC0;">{info['currency']}</div>
-                        </div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:18px; font-weight:800; color:{bal_color} !important; letter-spacing:-0.5px;">{bal:,.0f}</div>
-                        <div style="font-size:12px; color:#CBD5E0;">≈ TWD {twd_val:,.0f}</div>
-                    </div>
-                </div>
-                """
-                st.markdown(card_html, unsafe_allow_html=True)
+                # --- 卡片本體 (改用 expander 讓你可以點開編輯) ---
+                with st.expander(f"{info.get('icon','💰')} {name}  |  {info['currency']} {bal:,.0f}"):
+                    
+                    st.caption("編輯帳戶資訊")
+                    col_ed1, col_ed2 = st.columns(2)
+                    
+                    # 編輯餘額功能
+                    new_init_bal = col_ed1.number_input(
+                        f"修正初始餘額 ({info['currency']})", 
+                        value=float(info['balance']),
+                        key=f"bal_{name}"
+                    )
+                    
+                    if col_ed1.button("更新餘額", key=f"upd_{name}"):
+                        st.session_state['accounts'][name]['balance'] = new_init_bal
+                        st.success("已更新！")
+                        st.rerun()
+                        
+                    # 刪除功能
+                    if col_ed2.button("🗑️ 刪除此帳戶", key=f"del_{name}"):
+                        del st.session_state['accounts'][name]
+                        st.rerun()
+                    
+                    st.info(f"包含流水帳後餘額: {bal:,.0f}\n(初始: {info['balance']:,.0f} + 收: {inc:,.0f} - 支: {exp:,.0f})")
 
-    # 房貸另外顯示
+    # 房貸
     st.markdown('<div class="group-header">負債 / 貸款</div>', unsafe_allow_html=True)
     for loan in st.session_state['loans']:
         with st.container():
