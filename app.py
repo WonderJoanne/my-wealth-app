@@ -5,12 +5,17 @@ import datetime
 import altair as alt
 
 # --- 0. 頁面與手機優化設定 ---
-st.set_page_config(page_title="AssetFlow V9.2", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="AssetFlow V9.3", 
+    page_icon="📱", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
 # --- 1. CSS 視覺修復 (強制高對比配色) ---
 st.markdown("""
 <style>
-    /* 1. 全局強制設定 (解決深色模式文字消失問題) */
+    /* 1. 全局強制設定 */
     .stApp {
         background-color: #F4F7F6 !important;
     }
@@ -25,7 +30,7 @@ st.markdown("""
     footer {visibility: hidden;}
     [data-testid="stSidebar"] {display: none;}
 
-    /* 2. 頂部導航列 (深色底，高對比) */
+    /* 2. 頂部導航列 */
     div[role="radiogroup"] {
         background-color: #1E3A8A !important;
         padding: 10px 5px;
@@ -50,7 +55,7 @@ st.markdown("""
         border-radius: 8px;
     }
 
-    /* 3. 卡片樣式 (白底黑字) */
+    /* 3. 卡片樣式 */
     .mobile-card {
         background-color: #FFFFFF !important;
         padding: 18px;
@@ -93,7 +98,8 @@ st.markdown("""
 # --- 2. 資料初始化 ---
 DEFAULT_RATES = {"TWD": 1.0, "USD": 32.5, "JPY": 0.21, "VND": 0.00128, "EUR": 35.2}
 
-if 'rates' not in st.session_state: st.session_state['rates'] = DEFAULT_RATES
+if 'rates' not in st.session_state: 
+    st.session_state['rates'] = DEFAULT_RATES
 
 if 'categories' not in st.session_state:
     st.session_state['categories'] = {
@@ -110,8 +116,8 @@ if 'accounts' not in st.session_state:
     }
 
 if 'data' not in st.session_state:
-    # 修正：將資料拆分成多行，避免 SyntaxError
-    record1 = {
+    # 使用多行定義避免錯誤
+    r1 = {
         "日期": datetime.date.today(),
         "帳戶": "隨身皮夾",
         "類型": "支出",
@@ -120,7 +126,7 @@ if 'data' not in st.session_state:
         "幣別": "VND",
         "備註": "Pho Bo"
     }
-    record2 = {
+    r2 = {
         "日期": datetime.date.today(),
         "帳戶": "越南薪資",
         "類型": "收入",
@@ -129,10 +135,17 @@ if 'data' not in st.session_state:
         "幣別": "VND",
         "備註": "薪水"
     }
-    st.session_state['data'] = pd.DataFrame([record1, record2])
+    st.session_state['data'] = pd.DataFrame([r1, r2])
 
 if 'loans' not in st.session_state:
-    st.session_state['loans'] = [{'name': '台北房貸', 'total': 10350000, 'remaining': 10350000, 'rate': 2.53, 'years': 30, 'grace_period': 24}]
+    st.session_state['loans'] = [{
+        'name': '台北房貸', 
+        'total': 10350000, 
+        'remaining': 10350000, 
+        'rate': 2.53, 
+        'years': 30, 
+        'grace_period': 24
+    }]
 
 if 'stocks' not in st.session_state:
     st.session_state['stocks'] = pd.DataFrame(columns=['代號', '名稱', '持有股數', '目前市價', '幣別'])
@@ -148,17 +161,23 @@ selected_tab = st.radio(
     label_visibility="collapsed"
 )
 
-# --- 4. 內容區塊 ---
+# --- 4. 內容區塊計算 ---
 
 total_assets_twd = 0
 for name, info in st.session_state['accounts'].items():
     df = st.session_state['data']
-    bal = info['balance'] + df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum() - df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
+    # 分開計算避免單行太長
+    inc = df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum()
+    exp = df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
+    bal = info['balance'] + inc - exp
     total_assets_twd += convert_to_twd(bal, info['currency'])
     
 invest_val = 0
 if not st.session_state['stocks'].empty:
-    invest_val = (st.session_state['stocks']['持有股數'] * st.session_state['stocks']['目前市價']).sum()
+    # 安全計算
+    s_df = st.session_state['stocks']
+    invest_val = (s_df['持有股數'] * s_df['目前市價']).sum()
+
 loan_val = sum([l['remaining'] for l in st.session_state['loans']])
 home_val = sum([l['total'] for l in st.session_state['loans']])
 net_worth = total_assets_twd + invest_val + home_val - loan_val
@@ -196,12 +215,20 @@ if selected_tab == "🏠 總覽":
     st.subheader("近期交易")
     df_recent = st.session_state['data'].sort_index(ascending=False).head(5)
     for i, row in df_recent.iterrows():
+        # 安全取得圖示
+        icon = '💰'
+        if row['分類'] in ['餐飲', '食品']: icon = '🍜'
+        elif row['分類'] in ['交通']: icon = '🚌'
+        
+        # 安全取得顏色
+        color = '#DC2626' if row['類型']=='支出' else '#059669'
+
         with st.container():
             st.markdown(f"""
             <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px solid #E5E7EB;">
                 <div style="display:flex; align-items:center;">
                     <div style="background:#EFF6FF; width:42px; height:42px; border-radius:50%; display:flex; justify-content:center; align-items:center; margin-right:12px; font-size:20px;">
-                        {'🍜' if row['分類'] in ['餐飲', '食品'] else '🚌' if row['分類'] in ['交通'] else '💰'}
+                        {icon}
                     </div>
                     <div>
                         <div style="font-weight:600; font-size:16px; color:#111827 !important;">{row['分類']}</div>
@@ -209,7 +236,7 @@ if selected_tab == "🏠 總覽":
                     </div>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-weight:bold; color:{'#DC2626' if row['類型']=='支出' else '#059669'} !important;">
+                    <div style="font-weight:bold; color:{color} !important;">
                         {row['幣別']} {row['金額']:,.0f}
                     </div>
                     <div style="font-size:11px; color:#9CA3AF !important;">{row['日期'].strftime('%m/%d')}</div>
@@ -231,11 +258,4 @@ elif selected_tab == "➕ 記帳":
         curr = st.session_state['accounts'][acct_name]['currency']
 
         st.markdown(f"<p style='margin-bottom:5px; font-size:14px; color:#6B7280 !important;'>金額 ({curr})</p>", unsafe_allow_html=True)
-        tx_amt = st.number_input("金額", min_value=0.0, step=1000.0 if curr=="VND" else 1.0, format="%.0f", label_visibility="collapsed")
-        
-        if curr == "VND":
-            st.caption(f"≈ TWD {convert_to_twd(tx_amt, 'VND'):,.0f}")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        if tx_type == "支出":
-            cat_list = st.session_state['categories
+        tx_amt = st.number_input("金額", min_value=
