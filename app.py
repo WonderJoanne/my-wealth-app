@@ -6,7 +6,7 @@ from dateutil.relativedelta import relativedelta
 
 # --- 0. 頁面設定 ---
 st.set_page_config(
-    page_title="AssetFlow V15", 
+    page_title="AssetFlow V15.1", 
     page_icon="🏠", 
     layout="wide", 
     initial_sidebar_state="collapsed"
@@ -16,7 +16,23 @@ st.set_page_config(
 if 'current_page' not in st.session_state:
     st.session_state.current_page = "錢包"
 
-# --- 2. CSS 美學 (V14 Soft UI) ---
+# --- 🚨 自動修復舊資料 (關鍵修復代碼) ---
+# 檢測：如果 'loans' 存在且是舊版的 List 格式，強制重置為 Dict 格式
+if 'loans' in st.session_state and isinstance(st.session_state['loans'], list):
+    st.session_state['loans'] = {
+        "自住屋房貸": {
+            "total": 10350000,
+            "rate": 2.53,
+            "years": 30,
+            "grace_period": 2,
+            "start_date": datetime.date(2025, 11, 1),
+            "remaining": 10350000,
+            "paid_principal": 0
+        }
+    }
+    st.toast("⚠️ 系統已自動升級房貸資料結構！", icon="🔄")
+
+# --- 2. CSS 美學 ---
 st.markdown("""
 <style>
     .stApp { background-color: #F8F9FA !important; }
@@ -89,6 +105,7 @@ if 'data' not in st.session_state:
     r1 = {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": "支出", "分類": "餐飲", "金額": 50000, "幣別": "VND", "備註": "範例"}
     st.session_state['data'] = pd.DataFrame([r1])
 
+# 房貸初始化 (如果完全沒有資料才建立)
 if 'loans' not in st.session_state:
     st.session_state['loans'] = {
         "自住屋房貸": {
@@ -97,8 +114,8 @@ if 'loans' not in st.session_state:
             "years": 30,
             "grace_period": 2,
             "start_date": datetime.date(2025, 11, 1),
-            "remaining": 10350000, # 初始剩餘本金
-            "paid_principal": 0    # 已還本金
+            "remaining": 10350000,
+            "paid_principal": 0
         }
     }
 
@@ -108,7 +125,7 @@ if 'stocks' not in st.session_state:
 def convert_to_twd(amount, currency):
     return amount * st.session_state['rates'].get(currency, 1.0)
 
-# --- 4. 房貸計算核心 (PMT & 拆帳) ---
+# --- 4. 房貸計算核心 ---
 def calculate_mortgage_split(loan_info, current_date):
     """
     計算「當月」的應繳金額結構
@@ -130,24 +147,25 @@ def calculate_mortgage_split(loan_info, current_date):
     if months_passed < 0: return 0, 0, 0, "未開始"
     if months_passed >= total_months or remaining <= 0: return 0, 0, 0, "已結清"
     
-    # 計算當月利息 (基於目前剩餘本金)
+    # 計算當月利息
     interest_payment = remaining * rate_mo
     
     if months_passed < grace_months:
-        # 寬限期：只繳利息
-        return interest_payment, interest_payment, 0, "寬限期"
+        # 寬限期
+        return interest_payment, interest_payment, 0, f"寬限期 ({months_passed+1}/{grace_months})"
     else:
-        # 還款期：本息均攤
-        # 剩餘期數 (重新計算，因為可能有提前還款)
+        # 還款期
         rem_months = total_months - months_passed
         if rem_months <= 0: rem_months = 1
         
-        # 重新計算 PMT (因為本金可能變動過)
-        # PMT = P * r * (1+r)^n / ((1+r)^n - 1)
-        pmt = remaining * (rate_mo * (1 + rate_mo)**rem_months) / ((1 + rate_mo)**rem_months - 1)
-        
+        # PMT 公式
+        if rate_mo > 0:
+            pmt = remaining * (rate_mo * (1 + rate_mo)**rem_months) / ((1 + rate_mo)**rem_months - 1)
+        else:
+            pmt = remaining / rem_months
+            
         principal_payment = pmt - interest_payment
-        return pmt, interest_payment, principal_payment, "還款期"
+        return pmt, interest_payment, principal_payment, f"還款期 ({months_passed+1}/{total_months})"
 
 # --- 5. 導航列 ---
 with st.container():
@@ -183,10 +201,13 @@ if not st.session_state['stocks'].empty:
     s_df = st.session_state['stocks']
     invest_val = (s_df['持有股數'] * s_df['目前市價']).sum()
 
-# 房貸餘額 (負債)
-loan_remaining_total = sum([l['remaining'] for l in st.session_state['loans'].values()])
-# 房產價值 (資產 - 假設等於買入價)
-home_value_total = sum([l['total'] for l in st.session_state['loans'].values()])
+# 確保 loans 是字典才進行計算 (雙重保險)
+if isinstance(st.session_state['loans'], dict):
+    loan_remaining_total = sum([l['remaining'] for l in st.session_state['loans'].values()])
+    home_value_total = sum([l['total'] for l in st.session_state['loans'].values()])
+else:
+    loan_remaining_total = 0
+    home_value_total = 0
 
 real_assets = total_assets_twd + invest_val + home_value_total
 real_liabilities = total_liability_twd + loan_remaining_total
@@ -208,91 +229,68 @@ if st.session_state.current_page == "總覽":
     c1.metric("現金 (TWD)", f"${total_assets_twd:,.0f}")
     c2.metric("房貸餘額", f"${loan_remaining_total:,.0f}")
 
-# === ➕ 記帳 (V15 智慧房貸連動) ===
+# === ➕ 記帳 ===
 elif st.session_state.current_page == "記帳":
     st.subheader("新增交易")
     
     tx_type = st.radio("類型", ["支出", "收入", "轉帳"], horizontal=True)
     
-    # 欄位
     c1, c2 = st.columns(2)
     tx_date = c1.date_input("日期", datetime.date.today())
     
-    # 帳戶
     acct_options = list(st.session_state['accounts'].keys())
     if not acct_options: st.stop()
     acct_name = c2.selectbox("帳戶", acct_options)
     curr = st.session_state['accounts'][acct_name]['currency']
     
-    # 分類
     cats = st.session_state['categories']['支出'] if tx_type=="支出" else st.session_state['categories']['收入']
     tx_cat = st.selectbox("分類", cats)
     
-    # --- 房貸智慧邏輯區 ---
+    # 房貸連動
     default_amt = 0.0
     loan_selected = None
     standard_pay = 0
+    loan_name = None
     
-    if tx_cat == "房貸" and tx_type == "支出":
+    if tx_cat == "房貸" and tx_type == "支出" and isinstance(st.session_state['loans'], dict):
         loan_names = list(st.session_state['loans'].keys())
         if loan_names:
             st.info("🏠 偵測到房貸記帳模式")
             loan_name = st.selectbox("選擇房貸契約", loan_names)
             loan_selected = st.session_state['loans'][loan_name]
             
-            # 計算本期應繳
-            standard_pay, interest, principal, status = calculate_mortgage_split(loan_selected, tx_date)
+            pay, interest, principal, status = calculate_mortgage_split(loan_selected, tx_date)
             
             st.markdown(f"""
             <div class="loan-stat">
                 <b>📊 本期帳單試算 ({status})</b><br>
-                應繳總額：<span class="highlight-red">${standard_pay:,.0f}</span><br>
+                應繳總額：<span class="highlight-red">${pay:,.0f}</span><br>
                 <small>利息：${interest:,.0f} | 本金：${principal:,.0f}</small>
             </div>
             """, unsafe_allow_html=True)
-            default_amt = float(int(standard_pay))
-        else:
-            st.warning("尚未設定房貸，請去錢包新增！")
+            default_amt = float(int(pay))
 
-    # 金額輸入 (若為房貸，預設帶入應繳金額)
     tx_amt = st.number_input(f"金額 ({curr})", value=default_amt, step=1000.0)
     tx_note = st.text_input("備註")
 
-    # --- 房貸超額還款偵測 ---
-    extra_principal = 0
-    if loan_selected and tx_amt > standard_pay:
-        extra_principal = tx_amt - standard_pay
-        st.markdown(f"""
-        <div style="padding:10px; background-color:#FFF5F5; border-left:4px solid #E53E3E; margin:10px 0;">
-            🔥 <b>偵測到大額還款！</b><br>
-            多出的 <b style="color:#E53E3E">${extra_principal:,.0f}</b> 將自動用於償還本金！
-        </div>
-        """, unsafe_allow_html=True)
+    # 提前還款提示
+    if loan_selected and tx_amt > standard_pay and standard_pay > 0:
+        extra = tx_amt - standard_pay
+        st.markdown(f"🔥 偵測到大額還款！多出的 **${extra:,.0f}** 將自動償還本金")
 
     if st.button("確認記帳", use_container_width=True, type="primary"):
-        # 1. 寫入流水帳
         new_rec = {"日期": tx_date, "帳戶": acct_name, "類型": tx_type, "分類": tx_cat, "金額": tx_amt, "幣別": curr, "備註": tx_note}
         st.session_state['data'] = pd.concat([pd.DataFrame([new_rec]), st.session_state['data']], ignore_index=True)
         
-        # 2. 房貸連動邏輯 (自動扣本金)
-        if loan_selected:
-            # 本次總共還的本金 = 應還本金(若有) + 超額還款
-            # 注意：calculate_mortgage_split 算出的 principal 是這一期「應該」還的
-            # 我們要從 remaining 中扣掉的是：這一期的本金 + 多繳的錢
-            
-            # 重新取得計算值 (避免 UI 變數未更新)
+        # 扣減房貸
+        if loan_selected and loan_name:
             pay, inte, prin_std, stat = calculate_mortgage_split(loan_selected, tx_date)
-            
-            # 實際還本金 = 標準本金 + (實繳 - 標準應繳)
             actual_principal_paid = prin_std + (tx_amt - pay)
-            
-            # 更新 Session State
-            st.session_state['loans'][loan_name]['remaining'] -= actual_principal_paid
-            st.session_state['loans'][loan_name]['paid_principal'] += actual_principal_paid
-            
-            st.toast(f"✅ 記帳成功！房貸本金減少了 ${actual_principal_paid:,.0f}")
-        else:
-            st.success("已儲存！")
+            if actual_principal_paid > 0:
+                st.session_state['loans'][loan_name]['remaining'] -= actual_principal_paid
+                st.toast(f"✅ 房貸本金減少了 ${actual_principal_paid:,.0f}")
+        
+        st.success("已儲存！")
 
 # === 📊 分析 ===
 elif st.session_state.current_page == "分析":
@@ -304,14 +302,11 @@ elif st.session_state.current_page == "分析":
         st.bar_chart(df.groupby('類型')['金額(TWD)'].sum())
         st.dataframe(df)
 
-# === 💳 錢包 (進度條與預演) ===
+# === 💳 錢包 ===
 elif st.session_state.current_page == "錢包":
     st.subheader("資產管理")
 
-    # 1. 房貸卡片 (V15 完整版)
     st.markdown("### 🏠 房貸進度")
-    
-    # 新增房貸功能
     with st.expander("➕ 新增房貸"):
         nl_name = st.text_input("名稱", "新房貸")
         nl_total = st.number_input("總額", 10000000)
@@ -319,53 +314,47 @@ elif st.session_state.current_page == "錢包":
         nl_year = st.number_input("年限", 30)
         nl_grace = st.number_input("寬限期", 2)
         if st.button("建立"):
+            if isinstance(st.session_state['loans'], list): st.session_state['loans'] = {} # 再次確保
             st.session_state['loans'][nl_name] = {
                 "total": nl_total, "rate": nl_rate, "years": nl_year, "grace_period": nl_grace,
                 "start_date": datetime.date.today(), "remaining": nl_total, "paid_principal": 0
             }
             st.rerun()
 
-    for name, info in st.session_state['loans'].items():
-        # 計算進度
-        progress = 1 - (info['remaining'] / info['total'])
-        
-        # 下個月預告
-        next_month = datetime.date.today() + relativedelta(months=1)
-        n_pay, n_inte, n_prin, n_stat = calculate_mortgage_split(info, next_month)
-        
-        with st.container():
-            st.markdown(f"""
-            <div class="mobile-card">
-                <div style="display:flex; justify-content:space-between;">
-                    <span style="font-weight:bold; font-size:18px;">{name}</span>
-                    <span style="color:#718096;">{n_stat}</span>
+    if isinstance(st.session_state['loans'], dict):
+        for name, info in st.session_state['loans'].items():
+            progress = 1 - (info['remaining'] / info['total'])
+            next_month = datetime.date.today() + relativedelta(months=1)
+            n_pay, n_inte, n_prin, n_stat = calculate_mortgage_split(info, next_month)
+            
+            with st.container():
+                st.markdown(f"""
+                <div class="mobile-card">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="font-weight:bold; font-size:18px;">{name}</span>
+                        <span style="color:#718096;">{n_stat}</span>
+                    </div>
+                    <div style="font-size:24px; font-weight:bold; color:#2D3748; margin:10px 0;">
+                        ${info['remaining']:,.0f} <small style="font-size:14px; color:#A0AEC0;">/ ${info['total']:,.0f}</small>
+                    </div>
+                    <div style="background:#EDF2F7; height:10px; border-radius:5px; margin-bottom:5px;">
+                        <div style="background:#48BB78; width:{progress*100}%; height:100%; border-radius:5px;"></div>
+                    </div>
+                    <div style="text-align:right; font-size:12px; color:#48BB78; font-weight:bold;">
+                        屋主擁有權：{progress*100:.1f}%
+                    </div>
+                    <hr style="border-top: 1px solid #EDF2F7;">
+                    <div style="font-size:14px;">
+                        <b>📅 下月預告 ({next_month.strftime('%Y/%m')})</b><br>
+                        預計繳款：${n_pay:,.0f}<br>
+                        <span style="color:#718096;">利息：${n_inte:,.0f}</span> 
+                        <span style="color:#38A169; margin-left:10px;">➔ 償還本金：${n_prin:,.0f}</span>
+                    </div>
                 </div>
-                <div style="font-size:24px; font-weight:bold; color:#2D3748; margin:10px 0;">
-                    ${info['remaining']:,.0f} <small style="font-size:14px; color:#A0AEC0;">/ ${info['total']:,.0f}</small>
-                </div>
-                
-                <div style="background:#EDF2F7; height:10px; border-radius:5px; margin-bottom:5px;">
-                    <div style="background:#48BB78; width:{progress*100}%; height:100%; border-radius:5px;"></div>
-                </div>
-                <div style="text-align:right; font-size:12px; color:#48BB78; font-weight:bold;">
-                    屋主擁有權：{progress*100:.1f}%
-                </div>
-                
-                <hr style="border-top: 1px solid #EDF2F7;">
-                
-                <div style="font-size:14px;">
-                    <b>📅 下月預告 ({next_month.strftime('%Y/%m')})</b><br>
-                    預計繳款：${n_pay:,.0f}<br>
-                    <span style="color:#718096;">利息：${n_inte:,.0f}</span> 
-                    <span style="color:#38A169; margin-left:10px;">➔ 償還本金：${n_prin:,.0f}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-    # 2. 帳戶列表
     st.markdown("### 💳 我的帳戶")
     for name, info in st.session_state['accounts'].items():
-        # 簡單顯示帳戶 (略過編輯功能以節省篇幅，V14已有)
         df = st.session_state['data']
         inc = df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum()
         exp = df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
@@ -381,6 +370,5 @@ elif st.session_state.current_page == "錢包":
 # === 設定 ===
 elif st.session_state.current_page == "設定":
     st.subheader("設定")
-    st.write("匯率設定")
     c1, c2 = st.columns(2)
     st.session_state['rates']['VND'] = c1.number_input("1 VND =", value=st.session_state['rates']['VND'], format="%.5f")
