@@ -5,70 +5,96 @@ import datetime
 import altair as alt
 
 # --- 0. 頁面與手機優化設定 ---
-st.set_page_config(page_title="AssetFlow V8", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="AssetFlow V9", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 1. CSS 手機版型優化 (Mobile-First CSS) ---
+# --- 1. CSS 視覺修復 (強制配色版) ---
 st.markdown("""
 <style>
-    /* 強制使用手機系統原生字體 (解決字體問題) */
-    html, body, [class*="css"] {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+    /* 1. 全局強制設定 (解決深色模式文字消失問題) */
+    .stApp {
+        background-color: #F4F7F6 !important; /* 強制背景為淺灰 */
+    }
+    
+    html, body, p, div, span, label, h1, h2, h3, h4, h5, h6 {
+        color: #1F2937 !important; /* 強制所有文字為深灰 (除了特定反白區域) */
+        font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
     }
 
-    /* 隱藏 Streamlit 預設漢堡選單與 Footer，讓它看起來像純 APP */
+    /* 隱藏預設元件 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    [data-testid="stSidebar"] {display: none;} /* 強制隱藏側邊欄 */
+    [data-testid="stSidebar"] {display: none;}
 
-    /* 優化頂部導航列 (Radio Button 變身 Tab Bar) */
+    /* 2. 頂部導航列 (改為深色底，高對比) */
     div[role="radiogroup"] {
-        display: flex;
-        justify-content: space-between;
-        width: 100%;
-        background-color: white;
+        background-color: #1E3A8A !important; /* 深藍色背景 */
         padding: 10px 5px;
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        margin-bottom: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
     }
     
     div[role="radiogroup"] label {
-        flex: 1; /* 平均分配寬度 */
-        text-align: center;
         background-color: transparent !important;
         border: none !important;
-        padding: 5px !important;
     }
     
-    div[role="radiogroup"] label p {
-        font-size: 24px !important; /* 圖示放大 */
-        margin-bottom: 0px !important;
+    /* 導航文字與圖示強制轉白 */
+    div[role="radiogroup"] p {
+        color: #FFFFFF !important; 
+        font-size: 20px !important;
+        font-weight: 500 !important;
     }
     
-    /* 讓選中的項目有點變化 (Streamlit 限制較多，盡量優化) */
-    div[role="radiogroup"] label[data-checked="true"] p {
-        color: #2e86de !important;
-        font-weight: bold;
-        transform: scale(1.1);
+    /* 選中狀態：加一個底色亮光 */
+    div[role="radiogroup"] label[data-checked="true"] {
+        background-color: rgba(255,255,255,0.2) !important;
+        border-radius: 8px;
     }
 
-    /* 卡片樣式優化 */
+    /* 3. 卡片樣式 (強制白底黑字) */
     .mobile-card {
-        background: white;
-        padding: 15px;
+        background-color: #FFFFFF !important;
+        padding: 18px;
         border-radius: 16px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-        margin-bottom: 12px;
-        border: 1px solid #f0f2f5;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 15px;
+        border: 1px solid #E5E7EB;
     }
     
-    /* 按鈕全寬優化 */
+    /* 卡片內的文字顏色修正 */
+    .mobile-card div, .mobile-card span, .mobile-card p {
+        color: #1F2937 !important;
+    }
+
+    /* 4. Streamlit 原生元件優化 */
+    /* 輸入框背景改白，邊框加深 */
+    input, .stSelectbox div[data-baseweb="select"] div {
+        background-color: #FFFFFF !important;
+        color: #1F2937 !important;
+        border-color: #D1D5DB !important;
+    }
+    
+    /* 按鈕樣式 */
     .stButton button {
-        width: 100%;
+        background-color: #2563EB !important;
+        color: white !important;
+        border: none;
         border-radius: 12px;
         height: 50px;
         font-weight: 600;
     }
+    
+    /* Metric 大數字顏色 */
+    div[data-testid="stMetricValue"] {
+        color: #1F2937 !important;
+    }
+    
+    /* Progress Bar 顏色 */
+    .stProgress > div > div > div > div {
+        background-color: #2563EB !important;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,7 +103,6 @@ DEFAULT_RATES = {"TWD": 1.0, "USD": 32.5, "JPY": 0.21, "VND": 0.00128, "EUR": 35
 
 if 'rates' not in st.session_state: st.session_state['rates'] = DEFAULT_RATES
 
-# 初始化自訂分類 (V8 新功能)
 if 'categories' not in st.session_state:
     st.session_state['categories'] = {
         "支出": ["餐飲", "交通", "購物", "居住", "娛樂", "房貸", "醫療", "簽證/機票"],
@@ -93,7 +118,6 @@ if 'accounts' not in st.session_state:
     }
 
 if 'data' not in st.session_state:
-    # 預設資料
     st.session_state['data'] = pd.DataFrame([
         {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": "支出", "分類": "餐飲", "金額": 65000, "幣別": "VND", "備註": "Pho Bo"},
         {"日期": datetime.date.today(), "帳戶": "越南薪資", "類型": "收入", "分類": "薪資", "金額": 45000000, "幣別": "VND", "備註": "薪水"},
@@ -109,7 +133,7 @@ def convert_to_twd(amount, currency):
     return amount * st.session_state['rates'].get(currency, 1.0)
 
 # --- 3. 手機版導航列 (Top Navigation) ---
-# 這是模擬 APP 的 Tab Bar，放在最上面，直覺好點
+# 使用 Emoji + 簡短文字，背景已改深色，字改白
 selected_tab = st.radio(
     "Mobile Nav",
     ["🏠 總覽", "➕ 記帳", "📊 分析", "💳 錢包", "⚙️ 設定"],
@@ -136,14 +160,14 @@ net_worth = total_assets_twd + invest_val + home_val - loan_val
 
 # === 🏠 總覽頁 ===
 if selected_tab == "🏠 總覽":
-    # Hero Card (總資產)
+    # Hero Card (總資產) - 這是特殊反白區塊，字體要淺色
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%); padding: 25px; border-radius: 20px; color: white; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.15);">
-        <p style="margin:0; opacity:0.7; font-size: 14px;">淨資產 (Net Worth)</p>
-        <h1 style="margin:5px 0; color: white; font-size: 40px; font-weight: 700;">$""" + f"{net_worth:,.0f}" + """</h1>
-        <div style="display:flex; justify-content:space-between; margin-top:10px; opacity:0.9; font-size:13px;">
-            <span>資產: $""" + f"{total_assets_twd+invest_val+home_val:,.0f}" + """</span>
-            <span>負債: $""" + f"{loan_val:,.0f}" + """</span>
+    <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%); padding: 25px; border-radius: 20px; color: white !important; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);">
+        <p style="margin:0; opacity:0.8; font-size: 14px; color: white !important;">淨資產 (Net Worth)</p>
+        <h1 style="margin:5px 0; color: white !important; font-size: 40px; font-weight: 700;">$""" + f"{net_worth:,.0f}" + """</h1>
+        <div style="display:flex; justify-content:space-between; margin-top:10px; opacity:0.9; font-size:13px; color: white !important;">
+            <span style="color: white !important;">資產: $""" + f"{total_assets_twd+invest_val+home_val:,.0f}" + """</span>
+            <span style="color: white !important;">負債: $""" + f"{loan_val:,.0f}" + """</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -153,15 +177,15 @@ if selected_tab == "🏠 總覽":
     with c1:
         st.markdown(f"""
         <div class="mobile-card" style="text-align:center;">
-            <div style="font-size:12px; color:gray;">現金部位</div>
-            <div style="font-size:20px; font-weight:bold; color:#27ae60;">${total_assets_twd:,.0f}</div>
+            <div style="font-size:12px; color:#6B7280 !important;">現金部位</div>
+            <div style="font-size:20px; font-weight:bold; color:#059669 !important;">${total_assets_twd:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
     with c2:
         st.markdown(f"""
         <div class="mobile-card" style="text-align:center;">
-            <div style="font-size:12px; color:gray;">投資現值</div>
-            <div style="font-size:20px; font-weight:bold; color:#2980b9;">${invest_val:,.0f}</div>
+            <div style="font-size:12px; color:#6B7280 !important;">投資現值</div>
+            <div style="font-size:20px; font-weight:bold; color:#2563EB !important;">${invest_val:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -172,21 +196,21 @@ if selected_tab == "🏠 總覽":
         # 模仿手機列表設計
         with st.container():
             st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px solid #E5E7EB;">
                 <div style="display:flex; align-items:center;">
-                    <div style="background:#f1f3f4; width:40px; height:40px; border-radius:50%; display:flex; justify-content:center; align-items:center; margin-right:10px; font-size:20px;">
-                        {'🍔' if row['分類'] in ['餐飲', '食品'] else '🚌' if row['分類'] in ['交通'] else '💰'}
+                    <div style="background:#EFF6FF; width:42px; height:42px; border-radius:50%; display:flex; justify-content:center; align-items:center; margin-right:12px; font-size:20px;">
+                        {'🍜' if row['分類'] in ['餐飲', '食品'] else '🚌' if row['分類'] in ['交通'] else '💰'}
                     </div>
                     <div>
-                        <div style="font-weight:600; font-size:16px;">{row['分類']}</div>
-                        <div style="font-size:12px; color:gray;">{row['備註']} · {row['帳戶']}</div>
+                        <div style="font-weight:600; font-size:16px; color:#111827 !important;">{row['分類']}</div>
+                        <div style="font-size:12px; color:#6B7280 !important;">{row['備註']} · {row['帳戶']}</div>
                     </div>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-weight:bold; color:{'#e74c3c' if row['類型']=='支出' else '#27ae60'};">
+                    <div style="font-weight:bold; color:{'#DC2626' if row['類型']=='支出' else '#059669'} !important;">
                         {row['幣別']} {row['金額']:,.0f}
                     </div>
-                    <div style="font-size:11px; color:silver;">{row['日期'].strftime('%m/%d')}</div>
+                    <div style="font-size:11px; color:#9CA3AF !important;">{row['日期'].strftime('%m/%d')}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -196,7 +220,6 @@ if selected_tab == "🏠 總覽":
 elif selected_tab == "➕ 記帳":
     st.subheader("新增交易")
     
-    # 類型切換 (使用 Streamlit 原生 pills 或 radio horizontal)
     tx_type = st.radio("類型", ["支出", "收入", "轉帳"], horizontal=True, label_visibility="collapsed")
     
     with st.container(border=True):
@@ -205,14 +228,12 @@ elif selected_tab == "➕ 記帳":
         acct_name = c_acct.selectbox("帳戶", list(st.session_state['accounts'].keys()))
         curr = st.session_state['accounts'][acct_name]['currency']
 
-        # 金額 (大字體)
-        st.markdown(f"<p style='margin-bottom:5px; font-size:14px; color:gray;'>金額 ({curr})</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='margin-bottom:5px; font-size:14px; color:#6B7280 !important;'>金額 ({curr})</p>", unsafe_allow_html=True)
         tx_amt = st.number_input("金額", min_value=0.0, step=1000.0 if curr=="VND" else 1.0, format="%.0f", label_visibility="collapsed")
         
         if curr == "VND":
             st.caption(f"≈ TWD {convert_to_twd(tx_amt, 'VND'):,.0f}")
         
-        # 分類 (動態讀取 session_state)
         st.markdown("<br>", unsafe_allow_html=True)
         if tx_type == "支出":
             cat_list = st.session_state['categories']['支出']
@@ -225,138 +246,5 @@ elif selected_tab == "➕ 記帳":
         tx_note = st.text_input("備註 (選填)", placeholder="例如：午餐")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("確認記帳", type="primary"):
-            new_rec = {"日期": tx_date, "帳戶": acct_name, "類型": tx_type, "分類": tx_cat, "金額": tx_amt, "幣別": curr, "備註": tx_note}
-            st.session_state['data'] = pd.concat([pd.DataFrame([new_rec]), st.session_state['data']], ignore_index=True)
-            st.success("已儲存！")
-
-
-# === 📊 分析頁 ===
-elif selected_tab == "📊 分析":
-    st.subheader("財務分析")
-    
-    df = st.session_state['data'].copy()
-    df['金額(TWD)'] = df.apply(lambda x: convert_to_twd(x['金額'], x['幣別']), axis=1)
-    
-    # 簡易 Tab 切換
-    an_type = st.radio("", ["支出分佈", "收入結構", "收支趨勢"], horizontal=True, label_visibility="collapsed")
-    
-    if an_type == "支出分佈":
-        df_exp = df[df['類型']=='支出']
-        if not df_exp.empty:
-            st.markdown(f"<h2 style='text-align:center;'>${df_exp['金額(TWD)'].sum():,.0f}</h2>", unsafe_allow_html=True)
-            st.caption("本月總支出 (TWD)")
-            
-            chart_data = df_exp.groupby('分類')['金額(TWD)'].sum().reset_index()
-            base = alt.Chart(chart_data).encode(theta=alt.Theta("金額(TWD)", stack=True))
-            pie = base.mark_arc(innerRadius=60).encode(
-                color=alt.Color("分類", scale=alt.Scale(scheme='category20b')),
-                order=alt.Order("金額(TWD)", sort="descending"),
-            )
-            st.altair_chart(pie, use_container_width=True)
-            
-            # 排行榜
-            for _, row in chart_data.sort_values("金額(TWD)", ascending=False).iterrows():
-                pct = (row['金額(TWD)'] / df_exp['金額(TWD)'].sum()) * 100
-                st.write(f"**{row['分類']}** {pct:.1f}%")
-                st.progress(pct/100)
-        else:
-            st.info("尚無支出紀錄")
-
-    elif an_type == "收入結構":
-        df_inc = df[df['類型']=='收入']
-        if not df_inc.empty:
-            chart_data = df_inc.groupby('分類')['金額(TWD)'].sum().reset_index()
-            base = alt.Chart(chart_data).encode(theta=alt.Theta("金額(TWD)", stack=True))
-            pie = base.mark_arc(innerRadius=60).encode(
-                color=alt.Color("分類", scale=alt.Scale(scheme='category20c')),
-                order=alt.Order("金額(TWD)", sort="descending"),
-            )
-            st.altair_chart(pie, use_container_width=True)
-        else:
-            st.info("尚無收入紀錄")
-            
-    elif an_type == "收支趨勢":
-        trend = df[df['類型'].isin(['支出', '收入'])].groupby(['日期', '類型'])['金額(TWD)'].sum().reset_index()
-        chart = alt.Chart(trend).mark_bar().encode(
-            x='日期',
-            y='金額(TWD)',
-            color='類型',
-            column='類型'
-        )
-        st.altair_chart(chart, use_container_width=True)
-
-
-# === 💳 錢包頁 ===
-elif selected_tab == "💳 錢包":
-    st.subheader("我的資產")
-    
-    # 房貸進度 (精簡版)
-    st.markdown("##### 🏠 房貸")
-    for loan in st.session_state['loans']:
-        with st.container(border=True):
-            prog = 1 - (loan['remaining'] / loan['total'])
-            st.write(f"**{loan['name']}** ({prog*100:.1f}%)")
-            st.progress(prog)
-            st.caption(f"剩餘: ${loan['remaining']:,.0f}")
-            
-    # 帳戶列表
-    st.markdown("##### 💳 帳戶與現金")
-    for name, info in st.session_state['accounts'].items():
-        df = st.session_state['data']
-        bal = info['balance'] + df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum() - df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
-        
-        with st.container():
-            st.markdown(f"""
-            <div class="mobile-card" style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-weight:bold; font-size:16px;">{name}</div>
-                    <div style="font-size:12px; color:gray; background:#f0f0f0; display:inline-block; padding:2px 6px; border-radius:4px; margin-top:4px;">{info['currency']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-size:18px; font-weight:bold;">{bal:,.0f}</div>
-                    <div style="font-size:12px; color:silver;">≈ TWD {convert_to_twd(bal, info['currency']):,.0f}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-    # 投資列表
-    st.markdown("##### 📈 股票庫存")
-    if not st.session_state['stocks'].empty:
-        st.dataframe(st.session_state['stocks'], use_container_width=True)
-
-
-# === ⚙️ 設定頁 (新功能) ===
-elif selected_tab == "⚙️ 設定":
-    st.subheader("設定")
-    
-    with st.expander("🌍 匯率設定", expanded=True):
-        c1, c2 = st.columns(2)
-        st.session_state['rates']['VND'] = c1.number_input("1 VND =", value=st.session_state['rates']['VND'], format="%.5f")
-        st.session_state['rates']['USD'] = c2.number_input("1 USD =", value=st.session_state['rates']['USD'])
-        
-    with st.expander("🏷️ 分類管理 (自訂分類)", expanded=True):
-        st.caption("在此新增你的專屬分類")
-        
-        c_add1, c_add2 = st.columns([2, 1])
-        new_exp_cat = c_add1.text_input("輸入新支出分類", placeholder="例如：按摩、孝親費")
-        if c_add2.button("新增支出分類"):
-            if new_exp_cat and new_exp_cat not in st.session_state['categories']['支出']:
-                st.session_state['categories']['支出'].append(new_exp_cat)
-                st.success(f"已新增：{new_exp_cat}")
-                st.rerun()
-                
-        c_add3, c_add4 = st.columns([2, 1])
-        new_inc_cat = c_add3.text_input("輸入新收入分類", placeholder="例如：代購")
-        if c_add4.button("新增收入分類"):
-            if new_inc_cat and new_inc_cat not in st.session_state['categories']['收入']:
-                st.session_state['categories']['收入'].append(new_inc_cat)
-                st.success(f"已新增：{new_inc_cat}")
-                st.rerun()
-                
-        st.markdown("---")
-        st.write("目前支出分類：")
-        st.write(", ".join(st.session_state['categories']['支出']))
-        
-    with st.expander("💾 資料備份"):
-        st.info("此版本為測試原型，關閉視窗後資料會重置。如需永久保存，需開發正式版 APP 並串接資料庫。")
+        if st.button("確認記帳"):
+            new_rec = {"日期
