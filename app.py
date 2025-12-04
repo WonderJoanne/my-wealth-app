@@ -4,58 +4,50 @@ import numpy as np
 import datetime
 import altair as alt
 
-# --- 0. 頁面與手機優化設定 ---
+# --- 0. 頁面設定 ---
 st.set_page_config(
-    page_title="AssetFlow V9.4", 
+    page_title="AssetFlow V9.5", 
     page_icon="📱", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
 
-# --- 1. CSS 視覺修復 (強制高對比配色) ---
+# --- 1. CSS 樣式 (強制高對比) ---
 st.markdown("""
 <style>
-    /* 1. 全局強制設定 */
-    .stApp {
-        background-color: #F4F7F6 !important;
-    }
+    .stApp { background-color: #F4F7F6 !important; }
     
     html, body, p, div, span, label, h1, h2, h3, h4, h5, h6 {
         color: #1F2937 !important;
         font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
     }
 
-    /* 隱藏預設元件 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stSidebar"] {display: none;}
 
-    /* 2. 頂部導航列 */
+    /* 頂部導航 */
     div[role="radiogroup"] {
         background-color: #1E3A8A !important;
         padding: 10px 5px;
         border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         margin-bottom: 20px;
     }
-    
     div[role="radiogroup"] label {
         background-color: transparent !important;
         border: none !important;
     }
-    
     div[role="radiogroup"] p {
         color: #FFFFFF !important; 
         font-size: 20px !important;
         font-weight: 500 !important;
     }
-    
     div[role="radiogroup"] label[data-checked="true"] {
         background-color: rgba(255,255,255,0.2) !important;
         border-radius: 8px;
     }
 
-    /* 3. 卡片樣式 */
+    /* 卡片通用樣式 */
     .mobile-card {
         background-color: #FFFFFF !important;
         padding: 18px;
@@ -64,18 +56,16 @@ st.markdown("""
         margin-bottom: 15px;
         border: 1px solid #E5E7EB;
     }
-    
     .mobile-card div, .mobile-card span, .mobile-card p {
         color: #1F2937 !important;
     }
 
-    /* 4. 元件優化 */
+    /* 輸入框與按鈕 */
     input, .stSelectbox div[data-baseweb="select"] div {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
         border-color: #D1D5DB !important;
     }
-    
     .stButton button {
         background-color: #2563EB !important;
         color: white !important;
@@ -84,14 +74,8 @@ st.markdown("""
         height: 50px;
         font-weight: 600;
     }
-    
-    div[data-testid="stMetricValue"] {
-        color: #1F2937 !important;
-    }
-    
-    .stProgress > div > div > div > div {
-        background-color: #2563EB !important;
-    }
+    div[data-testid="stMetricValue"] { color: #1F2937 !important; }
+    .stProgress > div > div > div > div { background-color: #2563EB !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -152,7 +136,7 @@ if 'stocks' not in st.session_state:
 def convert_to_twd(amount, currency):
     return amount * st.session_state['rates'].get(currency, 1.0)
 
-# --- 3. 手機版導航列 ---
+# --- 3. 導航列 ---
 selected_tab = st.radio(
     "Mobile Nav",
     ["🏠 總覽", "➕ 記帳", "📊 分析", "💳 錢包", "⚙️ 設定"],
@@ -160,8 +144,7 @@ selected_tab = st.radio(
     label_visibility="collapsed"
 )
 
-# --- 4. 內容區塊計算 ---
-
+# --- 4. 計算邏輯 ---
 total_assets_twd = 0
 for name, info in st.session_state['accounts'].items():
     df = st.session_state['data']
@@ -180,28 +163,23 @@ home_val = sum([l['total'] for l in st.session_state['loans']])
 net_worth = total_assets_twd + invest_val + home_val - loan_val
 
 
-# === 🏠 總覽 ===
+# === 🏠 總覽頁 ===
 if selected_tab == "🏠 總覽":
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%); padding: 25px; border-radius: 20px; color: white !important; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);">
+    # Hero Card HTML 生成
+    hero_style = "background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%); padding: 25px; border-radius: 20px; color: white !important; margin-bottom: 20px;"
+    hero_html = f"""
+    <div style="{hero_style}">
         <p style="margin:0; opacity:0.8; font-size: 14px; color: white !important;">淨資產 (Net Worth)</p>
-        <h1 style="margin:5px 0; color: white !important; font-size: 40px; font-weight: 700;">$""" + f"{net_worth:,.0f}" + """</h1>
-        <div style="display:flex; justify-content:space-between; margin-top:10px; opacity:0.9; font-size:13px; color: white !important;">
-            <span style="color: white !important;">資產: $""" + f"{total_assets_twd+invest_val+home_val:,.0f}" + """</span>
-            <span style="color: white !important;">負債: $""" + f"{loan_val:,.0f}" + """</span>
+        <h1 style="margin:5px 0; color: white !important; font-size: 40px; font-weight: 700;">${net_worth:,.0f}</h1>
+        <div style="display:flex; justify-content:space-between; margin-top:10px; font-size:13px; color: white !important;">
+            <span style="color: white !important;">資產: ${total_assets_twd+invest_val+home_val:,.0f}</span>
+            <span style="color: white !important;">負債: ${loan_val:,.0f}</span>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(hero_html, unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(f"""
-        <div class="mobile-card" style="text-align:center;">
-            <div style="font-size:12px; color:#6B7280 !important;">現金部位</div>
-            <div style="font-size:20px; font-weight:bold; color:#059669 !important;">${total_assets_twd:,.0f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="mobile-card" style="text-align:center;">
-            <div style="font-size:12px; color:#6B7280 !important;">投資現值</div>
+        <div class="mobile
