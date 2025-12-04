@@ -2,178 +2,313 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
+import altair as alt
 
-# 設定頁面配置
-st.set_page_config(page_title="全資產管家", page_icon="💰", layout="wide")
+# --- 設定與初始化 ---
+st.set_page_config(page_title="全資產管家 V4 (越南海外版)", page_icon="💰", layout="wide")
 
-# --- 側邊欄導航 ---
-st.sidebar.title("💰 全資產管家")
-page = st.sidebar.radio("功能選單", ["總覽儀表板", "記一筆 (含載具)", "房貸進度管理", "投資庫存管理"])
+# 1. 匯率設定 (基準幣別為 TWD)
+# 這裡設定預設匯率，側邊欄可即時調整
+DEFAULT_RATES = {
+    "TWD": 1.0,
+    "USD": 32.5,
+    "JPY": 0.21,
+    "VND": 0.00128, # 1 TWD 約等於 780 VND，反算 1 VND 約 0.00128 TWD
+    "EUR": 35.2,
+    "CNY": 4.5
+}
 
-# --- 模擬資料庫 (Session State) ---
-if 'balance' not in st.session_state:
-    st.session_state['balance'] = 1500000 # 初始現金
+# 初始化 Session State
+if 'rates' not in st.session_state:
+    st.session_state['rates'] = DEFAULT_RATES
+
+# 2. 初始化帳戶 (預設加入越南帳戶)
+if 'accounts' not in st.session_state:
+    st.session_state['accounts'] = {
+        "台幣薪轉": {"type": "銀行", "currency": "TWD", "balance": 150000},
+        "越南薪資戶": {"type": "銀行", "currency": "VND", "balance": 50000000}, # 5千萬盾
+        "隨身皮夾(VND)": {"type": "現金", "currency": "VND", "balance": 2000000}, # 200萬盾
+        "美股帳戶": {"type": "投資", "currency": "USD", "balance": 3500},
+    }
+
+# 3. 初始化流水帳
+if 'data' not in st.session_state:
+    # 預設一些範例資料
+    st.session_state['data'] = pd.DataFrame([
+        {"日期": datetime.date.today(), "帳戶": "隨身皮夾(VND)", "類型": "支出", "分類": "餐飲", "金額": 65000, "幣別": "VND", "備註": "河粉"},
+        {"日期": datetime.date.today(), "帳戶": "隨身皮夾(VND)", "類型": "支出", "分類": "交通", "金額": 30000, "幣別": "VND", "備註": "Grab"},
+        {"日期": datetime.date.today(), "帳戶": "台幣薪轉", "類型": "支出", "分類": "保險", "金額": 3000, "幣別": "TWD", "備註": "儲蓄險"},
+        {"日期": datetime.date.today(), "帳戶": "越南薪資戶", "類型": "收入", "分類": "薪資", "金額": 45000000, "幣別": "VND", "備註": "11月薪資"},
+    ])
+
+# 4. 其他模組初始化
 if 'loans' not in st.session_state:
-    st.session_state['loans'] = [] # 房貸列表
+    st.session_state['loans'] = [{
+        'name': '台灣老家房貸', 'total': 10350000, 'remaining': 10350000, 
+        'rate': 2.53, 'years': 30, 'start_date': datetime.date(2025, 11, 1), 'grace_period': 24
+    }]
 if 'stocks' not in st.session_state:
-    st.session_state['stocks'] = pd.DataFrame(columns=['代號', '名稱', '持有股數', '平均成本', '目前市價'])
+    st.session_state['stocks'] = pd.DataFrame(columns=['代號', '名稱', '持有股數', '平均成本', '目前市價', '幣別'])
 
-# --- 1. 總覽儀表板 ---
-if page == "總覽儀表板":
-    st.title("📊 淨資產儀表板")
-    
-    # 計算資產
-    cash = st.session_state['balance']
-    
-    # 計算股票現值
-    stock_value = 0
-    if not st.session_state['stocks'].empty:
-        stock_value = (st.session_state['stocks']['持有股數'] * st.session_state['stocks']['目前市價']).sum()
-        
-    # 計算負債 (房貸剩餘本金)
-    liability = 0
-    for loan in st.session_state['loans']:
-        liability += loan['remaining_principal']
-        
-    net_worth = cash + stock_value - liability
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("總資產 (現金+股票)", f"${cash + stock_value:,.0f}", delta=None)
-    col2.metric("總負債 (房貸)", f"${liability:,.0f}", delta_color="inverse")
-    col3.metric("🔥 淨資產 (身價)", f"${net_worth:,.0f}", delta=f"{net_worth/1000000:.2f}M")
+# --- 側邊欄 ---
+with st.sidebar:
+    st.title("🇻🇳 全資產管家 V4")
+    menu = st.radio("功能選單", ["📱 記帳與帳本", "🍰 統計分析", "💳 帳戶管理", "📊 資產儀表板", "🏠 房貸進度", "📈 投資庫存"])
     
     st.markdown("---")
-    st.subheader("資產分佈")
-    chart_data = pd.DataFrame({
-        '類別': ['現金', '投資現值', '房地產(淨值)'],
-        '金額': [cash, stock_value, (10000000 - liability)] # 假設房產價值 1000萬
-    })
-    st.bar_chart(chart_data.set_index('類別'))
-
-# --- 2. 記一筆 (含載具模擬) ---
-elif page == "記一筆 (含載具)":
-    st.title("📝 快速記帳")
+    st.subheader("匯率調節 (對台幣)")
+    # 讓你能調整 VND 匯率
+    new_vnd = st.number_input("1 VND =", value=st.session_state['rates']['VND'], format="%.5f")
+    new_usd = st.number_input("1 USD =", value=st.session_state['rates']['USD'])
+    st.session_state['rates']['VND'] = new_vnd
+    st.session_state['rates']['USD'] = new_usd
     
-    tab1, tab2 = st.tabs(["手動輸入", "☁️ 載具同步 (模擬)"])
+    st.caption(f"目前試算: 100萬 VND ≈ {1000000 * new_vnd:.0f} TWD")
+
+# --- 輔助函數 ---
+def convert_to_twd(amount, currency):
+    return amount * st.session_state['rates'].get(currency, 1.0)
+
+# --- 1. 記帳與帳本 ---
+if menu == "📱 記帳與帳本":
+    st.subheader("📝 快速記帳")
     
-    with tab1:
-        with st.form("manual_entry"):
-            date = st.date_input("日期", datetime.date.today())
-            category = st.selectbox("分類", ["餐飲", "交通", "購物", "房貸還款", "投資轉帳"])
-            amount = st.number_input("金額", min_value=0)
-            note = st.text_input("備註")
-            submitted = st.form_submit_button("記帳")
-            
-            if submitted:
-                st.session_state['balance'] -= amount
-                st.success(f"已記錄：{category} ${amount}")
-                if category == "房貸還款":
-                    st.info("💡 系統提示：這筆房貸支出將自動拆分為「利息」與「本金償還」")
-
-    with tab2:
-        st.write("模擬從財政部 API 抓取資料...")
-        if st.button("🔄 同步載具資料"):
-            # 模擬抓到的資料
-            st.write("找到 3 筆新發票：")
-            invoices = [
-                {"store": "統一超商", "amount": 85, "cat": "早餐"},
-                {"store": "台灣中油", "amount": 1200, "cat": "交通"},
-                {"store": "全聯福利中心", "amount": 560, "cat": "日常用品"}
-            ]
-            for inv in invoices:
-                col_a, col_b, col_c = st.columns([2, 1, 1])
-                col_a.text(f"{inv['store']} - ${inv['amount']}")
-                col_b.text(inv['cat'])
-                if col_c.button("確認入帳", key=inv['store']):
-                    st.session_state['balance'] -= inv['amount']
-                    st.toast(f"{inv['store']} 已入帳！")
-
-# --- 3. 房貸進度管理 ---
-elif page == "房貸進度管理":
-    st.title("🏠 房貸管家")
-    
-    # 新增房貸功能
-    with st.expander("➕ 新增房貸設定"):
-        l_name = st.text_input("貸款名稱", "自住屋房貸")
-        l_total = st.number_input("貸款總額", value=10000000)
-        l_rate = st.number_input("年利率 (%)", value=2.1)
-        l_years = st.number_input("總年限", value=30)
-        if st.button("建立房貸帳戶"):
-            st.session_state['loans'].append({
-                'name': l_name,
-                'total': l_total,
-                'remaining_principal': l_total, # 初始剩餘本金
-                'rate': l_rate,
-                'months': l_years * 12
-            })
-            st.success("房貸帳戶建立完成！")
-
-    # 顯示房貸卡片
-    for i, loan in enumerate(st.session_state['loans']):
-        st.markdown(f"### {loan['name']}")
-        
-        # 進度條計算
-        progress = 1 - (loan['remaining_principal'] / loan['total'])
-        st.progress(progress)
-        st.caption(f"屋主擁有權進度：{progress*100:.1f}%")
-        
+    with st.container():
         c1, c2, c3 = st.columns(3)
-        c1.metric("原始貸款", f"${loan['total']:,.0f}")
-        c2.metric("剩餘本金", f"${loan['remaining_principal']:,.0f}")
-        c3.metric("目前利率", f"{loan['rate']}%")
+        tx_date = c1.date_input("日期", datetime.date.today())
+        tx_type = c2.selectbox("類型", ["支出", "收入", "轉帳"])
         
-        # 試算本期還款拆帳
-        monthly_rate = loan['rate'] / 100 / 12
-        # 本息均攤公式簡化版
-        monthly_pay = np.pmt(monthly_rate, loan['months'], -loan['total']) 
-        interest = loan['remaining_principal'] * monthly_rate
-        principal_pay = monthly_pay - interest
+        # 帳戶選擇 (自動帶出幣別)
+        acct_name = c3.selectbox("帳戶", list(st.session_state['accounts'].keys()))
+        acct_curr = st.session_state['accounts'][acct_name]['currency']
         
-        st.info(f"📅 下期預估繳款：${monthly_pay:,.0f}")
-        st.write(f"└─ 其中利息支出 (丟水裡)： **${interest:,.0f}**")
-        st.write(f"└─ 其中償還本金 (存房子)： **${principal_pay:,.0f}**")
+        c4, c5 = st.columns(2)
+        if tx_type == "支出":
+            tx_cat = c4.selectbox("分類", ["餐飲", "交通", "購物", "居住", "娛樂", "醫療", "房貸", "簽證/機票"])
+        elif tx_type == "收入":
+            tx_cat = c4.selectbox("分類", ["薪資", "獎金", "股息", "投資收益"])
+        else:
+            tx_cat = c4.selectbox("分類", ["轉帳", "換匯"])
+            
+        tx_amt = c5.number_input(f"金額 ({acct_curr})", min_value=0.0, step=1000.0 if acct_curr=="VND" else 10.0)
         
-        if st.button("模擬本月繳款", key=f"pay_{i}"):
-            loan['remaining_principal'] -= principal_pay
-            loan['months'] -= 1
-            st.session_state['balance'] -= monthly_pay
-            st.success("繳款成功！剩餘本金已更新，淨資產重新計算中...")
-            st.rerun()
+        tx_note = st.text_input("備註")
+        
+        if st.button("💾 儲存", type="primary", use_container_width=True):
+            new_rec = {
+                "日期": tx_date, "帳戶": acct_name, "類型": tx_type, 
+                "分類": tx_cat, "金額": tx_amt, "幣別": acct_curr, "備註": tx_note
+            }
+            st.session_state['data'] = pd.concat([pd.DataFrame([new_rec]), st.session_state['data']], ignore_index=True)
+            st.success("記帳成功！")
 
-# --- 4. 投資庫存管理 ---
-elif page == "投資庫存管理":
-    st.title("📈 投資庫存")
+    st.markdown("---")
     
-    with st.expander("➕ 買入股票/更新行情"):
-        col_in1, col_in2, col_in3 = st.columns(3)
-        s_code = col_in1.text_input("代號", "2330")
-        s_name = col_in2.text_input("名稱", "台積電")
-        s_qty = col_in3.number_input("股數", 1000)
-        
-        col_in4, col_in5 = st.columns(2)
-        s_cost = col_in4.number_input("平均成本", 500.0)
-        s_price = col_in5.number_input("目前市價 (模擬API)", 550.0) # 這裡模擬自動抓到的市價
-        
-        if st.button("新增/更新持股"):
-            new_row = pd.DataFrame({
-                '代號': [s_code], '名稱': [s_name], 
-                '持有股數': [s_qty], '平均成本': [s_cost], '目前市價': [s_price]
-            })
-            st.session_state['stocks'] = pd.concat([st.session_state['stocks'], new_row], ignore_index=True)
-            st.success("庫存已更新")
+    # 帳本顯示
+    st.subheader("📒 最近紀錄")
+    df_display = st.session_state['data'].copy()
+    
+    # 在列表中顯示台幣估值，讓你對花費有感
+    df_display['約合台幣'] = df_display.apply(lambda x: convert_to_twd(x['金額'], x['幣別']), axis=1)
+    
+    st.dataframe(
+        df_display, 
+        column_config={
+            "金額": st.column_config.NumberColumn(format="%.0f"), # 不顯示小數點，適合VND
+            "約合台幣": st.column_config.NumberColumn(format="$%.0f"),
+            "日期": st.column_config.DateColumn(format="MM-DD"),
+        },
+        use_container_width=True
+    )
 
+# --- 2. 統計分析 (NEW! 天天記帳風格) ---
+elif menu == "🍰 統計分析":
+    st.title("收支分析報表")
+    
+    df = st.session_state['data'].copy()
+    # 關鍵步驟：將所有交易換算成 TWD 以進行統一比較
+    df['金額(TWD)'] = df.apply(lambda x: convert_to_twd(x['金額'], x['幣別']), axis=1)
+    
+    col1, col2 = st.columns(2)
+    
+    # --- 支出分析 ---
+    with col1:
+        st.subheader("💸 支出分佈 (TWD計價)")
+        df_exp = df[df['類型'] == '支出']
+        if not df_exp.empty:
+            # 依分類加總
+            exp_chart_data = df_exp.groupby('分類')['金額(TWD)'].sum().reset_index()
+            
+            # 畫圓餅圖
+            base = alt.Chart(exp_chart_data).encode(theta=alt.Theta("金額(TWD)", stack=True))
+            pie = base.mark_arc(outerRadius=120, innerRadius=60).encode(
+                color=alt.Color("分類"),
+                order=alt.Order("金額(TWD)", sort="descending"),
+                tooltip=["分類", alt.Tooltip("金額(TWD)", format=",.0f")]
+            )
+            text = base.mark_text(radius=140).encode(
+                text=alt.Text("金額(TWD)", format=",.0f"),
+                order=alt.Order("金額(TWD)", sort="descending"),
+                color=alt.value("black") 
+            )
+            st.altair_chart(pie + text, use_container_width=True)
+            
+            # 顯示前三名列表
+            top3 = exp_chart_data.sort_values("金額(TWD)", ascending=False).head(3)
+            st.write("支出 Top 3:")
+            for _, row in top3.iterrows():
+                st.progress(min(1.0, row['金額(TWD)'] / exp_chart_data['金額(TWD)'].sum()))
+                st.caption(f"{row['分類']}: ${row['金額(TWD)']:,.0f}")
+        else:
+            st.info("尚無支出資料")
+
+    # --- 收入/帳戶分析 ---
+    with col2:
+        st.subheader("💰 收入來源")
+        df_inc = df[df['類型'] == '收入']
+        if not df_inc.empty:
+            inc_chart_data = df_inc.groupby('分類')['金額(TWD)'].sum().reset_index()
+            pie_inc = alt.Chart(inc_chart_data).mark_arc(outerRadius=120).encode(
+                theta=alt.Theta("金額(TWD)", stack=True),
+                color=alt.Color("分類", scale=alt.Scale(scheme='greens')),
+                tooltip=["分類", alt.Tooltip("金額(TWD)", format=",.0f")]
+            )
+            st.altair_chart(pie_inc, use_container_width=True)
+        else:
+            st.info("尚無收入資料")
+            
+    st.markdown("---")
+    st.subheader("📊 帳戶收支流向")
+    # 長條圖看哪個帳戶花最多
+    bar_chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X('帳戶'),
+        y=alt.Y('金額(TWD)', stack=True),
+        color='類型',
+        tooltip=['帳戶', '類型', '金額(TWD)']
+    )
+    st.altair_chart(bar_chart, use_container_width=True)
+
+# --- 3. 帳戶管理 ---
+elif menu == "💳 帳戶管理":
+    st.subheader("錢包與帳戶")
+    
+    with st.expander("➕ 新增帳戶 (支援 VND)"):
+        c1, c2, c3, c4 = st.columns(4)
+        n_name = c1.text_input("名稱", "越南銀行")
+        n_curr = c2.selectbox("幣別", ["TWD", "VND", "USD", "JPY"])
+        n_bal = c3.number_input("初始餘額", value=0)
+        if c4.button("新增"):
+            st.session_state['accounts'][n_name] = {"type": "一般", "currency": n_curr, "balance": n_bal}
+            st.success("建立成功")
+            
+    # 計算並顯示所有帳戶餘額
+    rows = []
+    total_in_twd = 0
+    
+    for name, info in st.session_state['accounts'].items():
+        # 計算流水帳後的餘額
+        df = st.session_state['data']
+        inc = df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum()
+        exp = df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
+        curr_bal = info['balance'] + inc - exp
+        
+        twd_val = convert_to_twd(curr_bal, info['currency'])
+        total_in_twd += twd_val
+        
+        rows.append({
+            "帳戶名稱": name,
+            "幣別": info['currency'],
+            "帳面餘額": curr_bal,
+            "折合台幣 (TWD)": twd_val
+        })
+        
+    st.dataframe(
+        pd.DataFrame(rows),
+        column_config={
+            "帳面餘額": st.column_config.NumberColumn(format=",.0f"), # VND友善格式
+            "折合台幣 (TWD)": st.column_config.NumberColumn(format="$%.0f"),
+        },
+        use_container_width=True
+    )
+    st.metric("👉 所有現金/存款總值 (TWD)", f"${total_in_twd:,.0f}")
+
+# --- 4. 資產儀表板 (含房貸/投資) ---
+elif menu == "📊 資產儀表板":
+    st.title("全資產總覽")
+    
+    # 1. 帳戶總資產 (TWD)
+    acct_total_twd = 0
+    for name, info in st.session_state['accounts'].items():
+        df = st.session_state['data']
+        curr_bal = info['balance'] + \
+                   df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum() - \
+                   df[(df['帳戶']==name) & (df['類型']=='支出')]['金額'].sum()
+        acct_total_twd += convert_to_twd(curr_bal, info['currency'])
+        
+    # 2. 投資總現值
+    invest_total_twd = 0
+    if not st.session_state['stocks'].empty:
+        df_s = st.session_state['stocks']
+        # 假設目前投資都是用 USD 或 TWD，這裡簡化計算
+        # 進階版應針對每一檔股票的幣別做換算
+        invest_total_twd = (df_s['持有股數'] * df_s['目前市價']).sum() # 暫時視為台幣
+        
+    # 3. 房產與貸款
+    home_val = sum([l['total'] for l in st.session_state['loans']])
+    loan_val = sum([l['remaining'] for l in st.session_state['loans']])
+    
+    net_worth = acct_total_twd + invest_total_twd + home_val - loan_val
+    
+    # 顯示
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("現金部位 (TWD)", f"${acct_total_twd:,.0f}", "含 VND/USD 換算")
+    col2.metric("投資部位", f"${invest_total_twd:,.0f}")
+    col3.metric("房貸負債", f"${loan_val:,.0f}", delta_color="inverse")
+    col4.metric("🏆 淨資產", f"${net_worth:,.0f}")
+
+    # 資產分佈圓餅圖
+    st.subheader("資產配置")
+    chart_data = pd.DataFrame([
+        {"類別": "現金/存款", "金額": acct_total_twd},
+        {"類別": "投資", "金額": invest_total_twd},
+        {"類別": "房產淨值", "金額": home_val - loan_val}
+    ])
+    c = alt.Chart(chart_data).mark_arc(innerRadius=60).encode(
+        theta=alt.Theta("金額", stack=True),
+        color=alt.Color("類別"),
+        tooltip=["類別", alt.Tooltip("金額", format=",.0f")]
+    )
+    st.altair_chart(c, use_container_width=True)
+
+# --- 5. 房貸進度 ---
+elif menu == "🏠 房貸進度":
+    st.title("房貸管理")
+    for loan in st.session_state['loans']:
+        st.info(f"{loan['name']} (利率 {loan['rate']}%)")
+        rem = loan['remaining']
+        prog = 1 - (rem / loan['total'])
+        st.progress(prog)
+        c1, c2 = st.columns(2)
+        c1.metric("剩餘本金", f"${rem:,.0f}")
+        c2.metric("已還進度", f"{prog*100:.2f}%")
+        
+        if st.button("模擬繳款 (本月)"):
+            st.toast("請至記帳頁面記錄房貸支出，此處僅供檢視進度")
+
+# --- 6. 投資庫存 ---
+elif menu == "📈 投資庫存":
+    st.title("投資部位")
+    # 這裡沿用簡易版
+    with st.expander("➕ 更新持股"):
+        c1, c2, c3 = st.columns(3)
+        code = c1.text_input("代號")
+        qty = c2.number_input("股數", 1000)
+        price = c3.number_input("現價", 100.0)
+        if st.button("加入"):
+            new_row = pd.DataFrame([{'代號': code, '持有股數': qty, '目前市價': price, '幣別': 'TWD'}])
+            st.session_state['stocks'] = pd.concat([st.session_state['stocks'], new_row], ignore_index=True)
+    
     if not st.session_state['stocks'].empty:
         df = st.session_state['stocks']
-        # 計算損益
         df['市值'] = df['持有股數'] * df['目前市價']
-        df['成本總額'] = df['持有股數'] * df['平均成本']
-        df['未實現損益'] = df['市值'] - df['成本總額']
-        df['報酬率'] = (df['未實現損益'] / df['成本總額']) * 100
-        
-        st.dataframe(df.style.format({
-            "平均成本": "{:.1f}", "目前市價": "{:.1f}", 
-            "市值": "{:,.0f}", "未實現損益": "{:+,.0f}", "報酬率": "{:+.2f}%"
-        }))
-        
-        total_pl = df['未實現損益'].sum()
-        st.metric("總未實現損益", f"${total_pl:+,.0f}", delta_color="normal")
+        st.dataframe(df, use_container_width=True)
