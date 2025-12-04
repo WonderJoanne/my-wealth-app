@@ -7,46 +7,54 @@ import altair as alt
 
 # --- 0. 頁面設定 ---
 st.set_page_config(
-    page_title="AssetFlow V19.1", 
-    page_icon="💎", 
+    page_title="AssetFlow V20", 
+    page_icon="📅", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
 
-# --- 1. CSS 極致深色 & 介面修復 ---
+# --- 1. 初始化 Session (導航與日期狀態) ---
+if 'view_date' not in st.session_state:
+    st.session_state.view_date = datetime.date.today()
+
+# --- 2. CSS 極致優化 (修復重疊問題) ---
 st.markdown("""
 <style>
-    /* 全局深色背景 */
-    .stApp {
-        background-color: #0E0E0E !important;
-        color: #FFFFFF !important;
-    }
+    /* 全局設定 */
+    .stApp { background-color: #000000 !important; color: #FFFFFF !important; }
     
-    /* 隱藏預設元件 */
+    /* 修正字體重疊：設定行高為正常，並允許換行 */
+    html, body, p, div, span, label, h1, h2, h3, h4, h5, h6 {
+        color: #FFFFFF !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        line-height: 1.5 !important; /* 關鍵修復 */
+        word-wrap: break-word !important;
+    }
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stSidebar"] {display: none;}
 
-    /* 字體顏色強制反白 */
-    h1, h2, h3, p, span, div, label, li, b, small {
-        color: #FFFFFF !important;
-        font-family: sans-serif !important;
-    }
-
-    /* === 輸入元件美化 (深灰底白字) === */
-    input, textarea, select {
-        background-color: #1C1C1E !important;
-        color: #FFFFFF !important;
-        border: 1px solid #333 !important;
+    /* === 日曆條樣式 === */
+    .calendar-day {
+        text-align: center;
+        padding: 5px;
         border-radius: 8px;
+        cursor: pointer;
+        border: 1px solid #333;
+        background-color: #1C1C1E;
+        transition: all 0.2s;
     }
-    div[data-baseweb="select"] > div {
-        background-color: #1C1C1E !important;
-        color: white !important;
-        border-color: #333 !important;
+    .calendar-day.active {
+        background-color: #0A84FF; /* iOS Blue */
+        border-color: #0A84FF;
+        color: white;
     }
-    
-    /* === 交易列表卡片 (仿 iOS/天天記帳) === */
+    .day-name { font-size: 12px; color: #8E8E93; }
+    .day-num { font-size: 18px; font-weight: bold; }
+    .day-active .day-name, .day-active .day-num { color: white !important; }
+
+    /* === 交易卡片 === */
     .tx-card {
         background-color: #1C1C1E;
         padding: 12px 16px;
@@ -55,62 +63,59 @@ st.markdown("""
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-left: 4px solid #333;
+        min-height: 60px; /* 防止內容擠壓 */
     }
-    .tx-left { display: flex; align-items: center; }
-    .tx-icon { font-size: 24px; margin-right: 12px; width: 30px; text-align: center; }
-    .tx-title { font-weight: bold; font-size: 16px; color: white; }
-    .tx-sub { font-size: 12px; color: #8E8E93 !important; }
-    .tx-amt { font-weight: bold; font-size: 16px; }
     
-    /* 顏色工具類 */
-    .c-green { color: #32D74B !important; }
-    .c-red { color: #FF453A !important; }
-    
-    /* 統計區塊 */
-    .stat-box {
+    /* === 統計區塊 === */
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
         background-color: #1C1C1E;
-        border-radius: 12px;
         padding: 15px;
-        text-align: center;
-        border: 1px solid #333;
+        border-radius: 12px;
+        margin-bottom: 15px;
     }
+    .stat-item { text-align: center; flex: 1; }
+    .stat-label { font-size: 12px; color: #8E8E93; margin-bottom: 4px; }
+    .stat-val { font-size: 16px; font-weight: bold; }
     
-    /* Tabs (分頁) 樣式 - 解決疊字 */
-    button[data-baseweb="tab"] {
-        font-size: 16px !important;
-        font-weight: 600 !important;
-        background-color: transparent !important;
-        color: #8E8E93 !important;
-        padding: 10px !important;
-    }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #0A84FF !important; /* iOS Blue */
-    }
-    
-    /* Expander 樣式 */
-    .streamlit-expanderHeader {
+    /* === 輸入框與按鈕 === */
+    input, textarea, select {
         background-color: #1C1C1E !important;
         color: white !important;
-        border: 1px solid #333;
+        border: 1px solid #333 !important;
+        border-radius: 8px;
     }
-    .streamlit-expanderContent {
-        background-color: #111 !important;
-        border: 1px solid #333;
-        border-top: none;
+    div[data-baseweb="select"] > div {
+        background-color: #1C1C1E !important;
+        color: white !important;
+        border-color: #333 !important;
     }
-    
-    /* 按鈕樣式 */
     .stButton button {
         background-color: #2C2C2E !important;
         color: white !important;
         border: 1px solid #3A3A3C !important;
         border-radius: 10px;
     }
+    
+    /* 顏色 */
+    .c-green { color: #30D158 !important; }
+    .c-red { color: #FF453A !important; }
+    
+    /* Expander 修正 */
+    .streamlit-expanderHeader {
+        background-color: #1C1C1E !important;
+        color: white !important;
+    }
+    .streamlit-expanderContent {
+        background-color: #111 !important;
+        border: 1px solid #333;
+        border-top: none; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. 資料初始化 ---
+# --- 3. 資料初始化 ---
 if 'rates' not in st.session_state: 
     st.session_state['rates'] = {"TWD": 1.0, "USD": 32.5, "JPY": 0.21, "VND": 0.00128, "EUR": 35.2}
 
@@ -120,14 +125,12 @@ if 'categories' not in st.session_state:
         "收入": ["薪資", "獎金", "股息", "副業"]
     }
 
-# 初始化固定收支
 if 'recurring' not in st.session_state:
     st.session_state['recurring'] = [
         {"name": "Netflix", "amt": 390, "type": "支出", "cat": "訂閱", "curr": "TWD"},
         {"name": "房租", "amt": 25000, "type": "支出", "cat": "居住", "curr": "TWD"}
     ]
 
-# 初始化帳戶
 if 'accounts' not in st.session_state:
     st.session_state['accounts'] = {
         "台幣薪轉": {"type": "銀行", "currency": "TWD", "balance": 150000, "icon": "🏦"},
@@ -135,8 +138,7 @@ if 'accounts' not in st.session_state:
         "隨身皮夾": {"type": "現金", "currency": "VND", "balance": 2500000, "icon": "💵"},
     }
 
-# 初始化房貸 (含防呆檢查)
-if 'loans' not in st.session_state or isinstance(st.session_state['loans'], list):
+if 'loans' not in st.session_state:
     st.session_state['loans'] = {
         "自住屋房貸": {
             "total": 10350000, "rate": 2.53, "years": 30, "grace_period": 2,
@@ -144,19 +146,17 @@ if 'loans' not in st.session_state or isinstance(st.session_state['loans'], list
         }
     }
 
-# 初始化股票
 if 'stocks' not in st.session_state:
     st.session_state['stocks'] = pd.DataFrame(columns=['代號', '名稱', '持有股數', '目前市價', '幣別'])
 
-# 初始化交易紀錄
 if 'data' not in st.session_state:
-    r1 = {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": "支出", "分類": "餐飲", "金額": 50000, "幣別": "VND", "備註": "河粉"}
+    r1 = {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": "支出", "分類": "餐飲", "金額": 50000, "幣別": "VND", "備註": "範例"}
     st.session_state['data'] = pd.DataFrame([r1])
 
 def convert_to_twd(amount, currency):
     return amount * st.session_state['rates'].get(currency, 1.0)
 
-# --- 3. 房貸計算核心 ---
+# --- 4. 房貸計算核心 ---
 def calculate_mortgage_split(loan_info, current_date):
     total = loan_info['total']
     remaining = loan_info['remaining']
@@ -180,7 +180,6 @@ def calculate_mortgage_split(loan_info, current_date):
     else:
         rem_months = total_months - months_passed
         if rem_months <= 0: rem_months = 1
-        # PMT 公式
         if rate_mo > 0:
             pmt = remaining * (rate_mo * (1 + rate_mo)**rem_months) / ((1 + rate_mo)**rem_months - 1)
         else:
@@ -188,31 +187,83 @@ def calculate_mortgage_split(loan_info, current_date):
         principal_payment = pmt - interest_payment
         return pmt, interest_payment, principal_payment, f"還款期 ({months_passed+1}/{total_months})"
 
-# --- 4. 主介面 (使用原生 Tabs 導航) ---
+# --- 5. 主導航 (原生 Tabs) ---
 tab_home, tab_add, tab_analysis, tab_assets, tab_settings = st.tabs([
     "📅 帳本", "➕ 記帳", "📊 分析", "💳 資產", "⚙️ 設定"
 ])
 
-# === 📅 帳本 (天天記帳風格) ===
+# ==========================================
+# 📅 帳本 (重現天天記帳首頁 - 週曆模式)
+# ==========================================
 with tab_home:
-    c_date, c_inc, c_exp = st.columns([2, 1, 1])
-    with c_date:
-        selected_date = st.date_input("日期", datetime.date.today(), label_visibility="collapsed")
+    # 1. 頂部月份與切換
+    current_view = st.session_state.view_date
+    col_prev, col_month, col_next = st.columns([1, 4, 1])
     
-    # 統計當日
+    if col_prev.button("◀", key="prev_week"):
+        st.session_state.view_date -= datetime.timedelta(days=7)
+        st.rerun()
+        
+    with col_month:
+        # 顯示當前年月
+        st.markdown(f"<h3 style='text-align: center; margin: 0;'>{current_view.strftime('%Y年 %m月')}</h3>", unsafe_allow_html=True)
+        
+    if col_next.button("▶", key="next_week"):
+        st.session_state.view_date += datetime.timedelta(days=7)
+        st.rerun()
+
+    # 2. 週曆條 (7個按鈕)
+    # 算出本週第一天 (週一)
+    start_of_week = current_view - datetime.timedelta(days=current_view.weekday())
+    week_cols = st.columns(7)
+    week_days = ["一", "二", "三", "四", "五", "六", "日"]
+    
+    selected_date = st.session_state.view_date
+    
+    for i in range(7):
+        day_date = start_of_week + datetime.timedelta(days=i)
+        is_selected = (day_date == selected_date)
+        
+        # 樣式判斷
+        bg_color = "#0A84FF" if is_selected else "#1C1C1E"
+        border_color = "#0A84FF" if is_selected else "#333"
+        text_color = "white"
+        
+        with week_cols[i]:
+            # 使用按鈕模擬點擊
+            # 顯示格式: 週\n日期
+            btn_label = f"{week_days[i]}\n{day_date.day}"
+            if st.button(btn_label, key=f"day_{i}", use_container_width=True):
+                st.session_state.view_date = day_date
+                st.rerun()
+            
+            # 如果是被選中的，下方顯示一個小標示 (用 CSS 無法動態做，這裡用按鈕狀態呈現)
+
+    # 3. 當日統計
     df_day = st.session_state['data'][st.session_state['data']['日期'] == selected_date]
     day_inc = df_day[df_day['類型']=='收入'].apply(lambda x: convert_to_twd(x['金額'], x['幣別']), axis=1).sum()
     day_exp = df_day[df_day['類型']=='支出'].apply(lambda x: convert_to_twd(x['金額'], x['幣別']), axis=1).sum()
     
-    with c_inc:
-        st.markdown(f'<div class="stat-box"><div style="font-size:12px; color:#888;">收入</div><div class="c-green" style="font-weight:bold;">{day_inc:,.0f}</div></div>', unsafe_allow_html=True)
-    with c_exp:
-        st.markdown(f'<div class="stat-box"><div style="font-size:12px; color:#888;">支出</div><div class="c-red" style="font-weight:bold;">{day_exp:,.0f}</div></div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="stat-row">
+        <div class="stat-item">
+            <div class="stat-label">收入</div>
+            <div class="stat-val c-green">+{day_inc:,.0f}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">支出</div>
+            <div class="stat-val c-red">-{day_exp:,.0f}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">結餘</div>
+            <div class="stat-val">${day_inc-day_exp:,.0f}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.write("") # Spacer
-    
+    # 4. 交易清單
     if df_day.empty:
-        st.info("📭 本日無紀錄")
+        st.info(f"{selected_date.strftime('%m/%d')} 無紀錄")
     else:
         for idx, row in df_day.iterrows():
             icon = "🏠" if row['分類']=="房貸" else "🍜" if row['分類'] in ["餐飲","食品"] else "💰"
@@ -225,21 +276,26 @@ with tab_home:
                     <div class="tx-icon">{icon}</div>
                     <div>
                         <div class="tx-title">{row['分類']}</div>
-                        <div class="tx-sub">{row['帳戶']} • {row['備註']}</div>
+                        <div style="font-size:12px; color:#888;">{row['帳戶']} • {row['備註']}</div>
                     </div>
                 </div>
-                <div class="tx-amt {color_class}">{sign} {row['幣別']} {row['金額']:,.0f}</div>
+                <div style="font-weight:bold; font-size:16px;" class="{color_class}">
+                    {sign} {row['幣別']} {row['金額']:,.0f}
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
-# === ➕ 記帳 (含固定收支與房貸) ===
+# ==========================================
+# ➕ 記帳
+# ==========================================
 with tab_add:
-    sub_t1, sub_t2 = st.tabs(["📝 一般", "🔄 固定/訂閱"])
+    st.subheader("新增交易")
+    sub_t1, sub_t2 = st.tabs(["一般記帳", "固定收支"])
     
     with sub_t1:
         tx_type = st.radio("類型", ["支出", "收入", "轉帳"], horizontal=True)
         c1, c2 = st.columns(2)
-        tx_date = c1.date_input("日期", datetime.date.today(), key="add_date")
+        tx_date = c1.date_input("日期", datetime.date.today())
         
         acct_opts = list(st.session_state['accounts'].keys())
         acct_name = c2.selectbox("帳戶", acct_opts) if acct_opts else None
@@ -249,7 +305,7 @@ with tab_add:
             cats = st.session_state['categories']['支出'] if tx_type=="支出" else st.session_state['categories']['收入']
             tx_cat = st.selectbox("分類", cats)
             
-            # 房貸偵測
+            # 房貸智慧偵測
             default_amt = 0.0
             loan_obj = None
             loan_key = None
@@ -261,7 +317,7 @@ with tab_add:
                     loan_key = st.selectbox("房貸契約", loan_opts)
                     loan_obj = st.session_state['loans'][loan_key]
                     pay, inte, prin, stat = calculate_mortgage_split(loan_obj, tx_date)
-                    st.info(f"📊 本期應繳: ${pay:,.0f} ({stat}) | 利息: ${inte:,.0f}")
+                    st.info(f"📊 本期 ({stat}): ${pay:,.0f} (利息 ${inte:,.0f})")
                     default_amt = float(int(pay))
                     std_pay = pay
 
@@ -275,7 +331,6 @@ with tab_add:
                 new_rec = {"日期": tx_date, "帳戶": acct_name, "類型": tx_type, "分類": tx_cat, "金額": tx_amt, "幣別": curr, "備註": tx_note}
                 st.session_state['data'] = pd.concat([pd.DataFrame([new_rec]), st.session_state['data']], ignore_index=True)
                 
-                # 房貸扣款
                 if loan_obj:
                     p, i, p_std, s = calculate_mortgage_split(loan_obj, tx_date)
                     actual_prin = p_std + (tx_amt - p)
@@ -285,27 +340,18 @@ with tab_add:
                 st.success("已記帳")
 
     with sub_t2:
-        st.caption("固定收支管理")
         for item in st.session_state['recurring']:
-            col_info, col_btn = st.columns([3, 1])
-            with col_info:
-                st.markdown(f"**{item['name']}** - {item['curr']} {item['amt']}")
-                st.caption(f"{item['type']} | {item['cat']}")
-            with col_btn:
-                if st.button("入帳", key=f"rec_{item['name']}"):
-                    new_rec = {
-                        "日期": datetime.date.today(),
-                        "帳戶": "隨身皮夾", 
-                        "類型": item['type'],
-                        "分類": item['cat'],
-                        "金額": item['amt'],
-                        "幣別": item['curr'],
-                        "備註": f"固定: {item['name']}"
-                    }
-                    st.session_state['data'] = pd.concat([pd.DataFrame([new_rec]), st.session_state['data']], ignore_index=True)
-                    st.success("OK")
+            c_info, c_btn = st.columns([3, 1])
+            c_info.write(f"**{item['name']}** - {item['curr']} {item['amt']}")
+            if c_btn.button("入帳", key=f"rec_{item['name']}"):
+                # 簡化：預設帳戶為隨身皮夾，實際應可選
+                new_rec = {"日期": datetime.date.today(), "帳戶": "隨身皮夾", "類型": item['type'], "分類": item['cat'], "金額": item['amt'], "幣別": item['curr'], "備註": f"固定: {item['name']}"}
+                st.session_state['data'] = pd.concat([pd.DataFrame([new_rec]), st.session_state['data']], ignore_index=True)
+                st.success("OK")
 
-# === 📊 分析 (甜甜圈+長條) ===
+# ==========================================
+# 📊 分析
+# ==========================================
 with tab_analysis:
     df = st.session_state['data'].copy()
     if df.empty:
@@ -313,21 +359,19 @@ with tab_analysis:
     else:
         df['金額(TWD)'] = df.apply(lambda x: convert_to_twd(x['金額'], x['幣別']), axis=1)
         
-        st.subheader("支出分佈")
+        st.markdown("### 支出分佈")
         df_exp = df[df['類型']=='支出']
         if not df_exp.empty:
             chart_data = df_exp.groupby('分類')['金額(TWD)'].sum().reset_index()
             base = alt.Chart(chart_data).encode(theta=alt.Theta("金額(TWD)", stack=True))
             pie = base.mark_arc(innerRadius=60).encode(
-                color=alt.Color("分類", scale=alt.Scale(scheme='tableau20')),
+                color=alt.Color("分類", scale=alt.Scale(scheme='category20')),
                 order=alt.Order("金額(TWD)", sort="descending"),
                 tooltip=["分類", "金額(TWD)"]
             )
             st.altair_chart(pie, use_container_width=True)
-        else:
-            st.info("尚無支出")
         
-        st.subheader("收支趨勢")
+        st.markdown("### 收支趨勢")
         trend = df.groupby(['日期', '類型'])['金額(TWD)'].sum().reset_index()
         bar = alt.Chart(trend).mark_bar().encode(
             x='日期', y='金額(TWD)',
@@ -336,12 +380,13 @@ with tab_analysis:
         )
         st.altair_chart(bar, use_container_width=True)
 
-# === 💳 資產 (全功能回歸) ===
+# ==========================================
+# 💳 資產 (房貸與帳戶編輯)
+# ==========================================
 with tab_assets:
     # 總資產計算
     total_asset = 0
     total_debt = 0
-    
     for name, info in st.session_state['accounts'].items():
         df = st.session_state['data']
         inc = df[(df['帳戶']==name) & (df['類型']=='收入')]['金額'].sum()
@@ -353,12 +398,13 @@ with tab_assets:
     
     loan_debt = sum([l['remaining'] for l in st.session_state['loans'].values()])
     total_debt += loan_debt
-    home_asset = sum([l['total'] for l in st.session_state['loans'].values()]) # 簡單估值
+    home_asset = sum([l['total'] for l in st.session_state['loans'].values()])
     total_asset += home_asset
     
+    # 淨資產卡片
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333;">
-        <div style="color:#888; font-size:14px;">淨資產 (Net Worth)</div>
+        <div style="color:#888; font-size:14px;">淨資產</div>
         <div style="color:white; font-size:32px; font-weight:bold;">${total_asset - total_debt:,.0f}</div>
         <div style="display:flex; justify-content:space-between; margin-top:10px; font-size:13px; color:#AAA;">
             <span>資產: ${total_asset:,.0f}</span>
@@ -367,15 +413,15 @@ with tab_assets:
     </div>
     """, unsafe_allow_html=True)
 
-    # 房貸區
-    st.markdown("##### 🏠 房貸")
-    with st.expander("➕ 新增 / 編輯房貸"):
+    # 1. 房貸區
+    st.markdown("#### 🏠 房貸智慧管家")
+    with st.expander("➕ 新增/編輯房貸"):
         l_name = st.text_input("名稱", "新房貸")
         l_total = st.number_input("總額", 10000000)
         l_rate = st.number_input("利率", 2.53)
         l_year = st.number_input("年限", 30)
         l_grace = st.number_input("寬限期", 2)
-        if st.button("建立/更新房貸"):
+        if st.button("建立/更新"):
             st.session_state['loans'][l_name] = {
                 "total": l_total, "rate": l_rate, "years": l_year, "grace_period": l_grace,
                 "start_date": datetime.date.today(), "remaining": l_total, "paid_principal": 0
@@ -389,14 +435,14 @@ with tab_assets:
         
         with st.expander(f"{name} (剩餘 ${info['remaining']:,.0f})"):
             st.progress(prog)
-            st.caption(f"屋主進度: {prog*100:.1f}% | 狀態: {s}")
+            st.caption(f"進度: {prog*100:.1f}% | 下期: {s}")
             st.write(f"下月應繳: **${p:,.0f}** (利息 ${i:,.0f})")
             if st.button("刪除", key=f"del_l_{name}"):
                 del st.session_state['loans'][name]
                 st.rerun()
 
-    # 帳戶區
-    st.markdown("##### 💳 帳戶")
+    # 2. 帳戶區
+    st.markdown("#### 💳 帳戶列表")
     with st.expander("➕ 新增帳戶"):
         n_n = st.text_input("名稱")
         n_c = st.selectbox("幣別", ["TWD", "VND", "USD"])
@@ -420,14 +466,13 @@ with tab_assets:
                 del st.session_state['accounts'][name]
                 st.rerun()
 
-# === ⚙️ 設定 (分類管理) ===
+# === ⚙️ 設定 ===
 with tab_settings:
     st.subheader("設定")
-    with st.expander("🏷️ 分類管理", expanded=True):
-        c_add1, c_add2 = st.columns([2, 1])
-        new_exp_cat = c_add1.text_input("新增支出分類")
-        if c_add2.button("新增", key="add_cat_btn"):
-            if new_exp_cat and new_exp_cat not in st.session_state['categories']['支出']:
-                st.session_state['categories']['支出'].append(new_exp_cat)
-                st.rerun()
-        st.caption("目前分類: " + ", ".join(st.session_state['categories']['支出']))
+    with st.expander("🏷️ 分類管理"):
+        new_cat = st.text_input("新增支出分類")
+        if st.button("新增"):
+            st.session_state['categories']['支出'].append(new_cat)
+            st.rerun()
+    with st.expander("🌍 匯率"):
+        st.session_state['rates']['VND'] = st.number_input("1 VND =", value=st.session_state['rates']['VND'], format="%.5f")
